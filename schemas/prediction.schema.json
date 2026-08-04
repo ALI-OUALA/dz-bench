@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "prediction.schema.json",
+  "title": "DZ-Bench system predictions",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "dataset_revision": { "$ref": "common.schema.json#/$defs/datasetRevision" },
+    "coordinate_system": { "$ref": "common.schema.json#/$defs/coordinateSystem" },
+    "system": { "$ref": "common.schema.json#/$defs/systemMetadata" },
+    "run": { "$ref": "common.schema.json#/$defs/runMetadata" },
+    "samples": {
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/predictionSample" }
+    }
+  },
+  "required": ["schema_version", "dataset_revision", "coordinate_system", "system", "run", "samples"]
+}

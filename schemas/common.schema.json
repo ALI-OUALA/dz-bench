@@ -1,0 +1,511 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "common.schema.json",
+  "title": "DZ-Bench shared public definitions",
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "revision": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "checksum": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "value": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+        "size_bytes": { "type": ["integer", "null"], "minimum": 0 }
+      },
+      "required": ["algorithm", "value"]
+    },
+    "datasetRevision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dataset_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "revision": { "$ref": "common.schema.json#/$defs/revision" },
+        "manifest_checksum": {
+          "anyOf": [
+            { "$ref": "common.schema.json#/$defs/checksum" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "required": ["dataset_id", "revision"]
+    },
+    "coordinateSystem": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "unit": { "const": "pixel" },
+        "origin": { "const": "top_left" },
+        "x_axis": { "const": "right" },
+        "y_axis": { "const": "down" }
+      },
+      "required": ["unit", "origin", "x_axis", "y_axis"]
+    },
+    "boundingBox": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "number", "minimum": 0 },
+        "y": { "type": "number", "minimum": 0 },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "required": ["x", "y", "width", "height"]
+    },
+    "confidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "calibrated": { "type": "boolean" },
+        "method": { "type": ["string", "null"], "minLength": 1 }
+      },
+      "required": ["score", "calibrated"]
+    },
+    "warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": { "$ref": "common.schema.json#/$defs/identifier" },
+        "message": { "type": "string", "minLength": 1 },
+        "severity": { "enum": ["info", "warning", "error"] },
+        "stage": { "type": ["string", "null"], "minLength": 1 }
+      },
+      "required": ["code", "message", "severity"]
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": { "$ref": "common.schema.json#/$defs/identifier" },
+        "message": { "type": "string", "minLength": 1 },
+        "stage": { "type": ["string", "null"], "minLength": 1 },
+        "retryable": { "type": "boolean" }
+      },
+      "required": ["code", "message", "retryable"]
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "human_annotation",
+            "synthetic_generator",
+            "system_prediction",
+            "native_pdf",
+            "ocr",
+            "vlm",
+            "manual_correction",
+            "derived"
+          ]
+        },
+        "source": { "type": "string", "minLength": 1 },
+        "version": { "type": ["string", "null"], "minLength": 1 },
+        "model": { "type": ["string", "null"], "minLength": 1 },
+        "stage": { "type": ["string", "null"], "minLength": 1 },
+        "details": { "type": "object", "additionalProperties": true }
+      },
+      "required": ["kind", "source", "details"]
+    },
+    "alternative": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "raw_text": { "type": "string" },
+        "normalized_text": { "type": "string" },
+        "confidence": { "$ref": "common.schema.json#/$defs/confidence" },
+        "provenance": { "$ref": "common.schema.json#/$defs/provenance" },
+        "reason": { "type": ["string", "null"], "minLength": 1 }
+      },
+      "required": ["raw_text", "normalized_text", "confidence", "provenance"]
+    },
+    "textSpan": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "span_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "raw_text": { "type": "string" },
+        "normalized_text": { "type": "string" },
+        "search_text": { "type": ["string", "null"] },
+        "language": { "enum": ["ar", "fr", "en", "latin", "mixed", "unknown"] },
+        "script": { "enum": ["arabic", "latin", "mixed", "common", "unknown"] },
+        "direction": { "enum": ["rtl", "ltr", "mixed", "unknown"] },
+        "bbox": { "$ref": "common.schema.json#/$defs/boundingBox" },
+        "confidence": { "$ref": "common.schema.json#/$defs/confidence" },
+        "provenance": { "$ref": "common.schema.json#/$defs/provenance" },
+        "alternatives": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/alternative" }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/warning" }
+        }
+      },
+      "required": [
+        "span_id",
+        "raw_text",
+        "normalized_text",
+        "language",
+        "script",
+        "direction",
+        "bbox",
+        "confidence",
+        "provenance",
+        "alternatives",
+        "warnings"
+      ]
+    },
+    "textLine": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "line_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "raw_text": { "type": "string" },
+        "normalized_text": { "type": "string" },
+        "search_text": { "type": ["string", "null"] },
+        "language": { "enum": ["ar", "fr", "en", "latin", "mixed", "unknown"] },
+        "script": { "enum": ["arabic", "latin", "mixed", "common", "unknown"] },
+        "direction": { "enum": ["rtl", "ltr", "mixed", "unknown"] },
+        "bbox": { "$ref": "common.schema.json#/$defs/boundingBox" },
+        "reading_order_index": { "type": "integer", "minimum": 0 },
+        "confidence": { "$ref": "common.schema.json#/$defs/confidence" },
+        "provenance": { "$ref": "common.schema.json#/$defs/provenance" },
+        "spans": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "common.schema.json#/$defs/textSpan" }
+        },
+        "alternatives": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/alternative" }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/warning" }
+        }
+      },
+      "required": [
+        "line_id",
+        "raw_text",
+        "normalized_text",
+        "language",
+        "script",
+        "direction",
+        "bbox",
+        "reading_order_index",
+        "confidence",
+        "provenance",
+        "spans",
+        "alternatives",
+        "warnings"
+      ]
+    },
+    "block": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "block_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "block_type": {
+          "enum": [
+            "title",
+            "instruction",
+            "exercise",
+            "subquestion",
+            "paragraph",
+            "list",
+            "table",
+            "equation",
+            "figure",
+            "diagram",
+            "caption",
+            "header",
+            "footer",
+            "page_number",
+            "answer_space",
+            "stamp",
+            "signature",
+            "unknown"
+          ]
+        },
+        "bbox": { "$ref": "common.schema.json#/$defs/boundingBox" },
+        "reading_order_index": { "type": "integer", "minimum": 0 },
+        "confidence": { "$ref": "common.schema.json#/$defs/confidence" },
+        "provenance": { "$ref": "common.schema.json#/$defs/provenance" },
+        "lines": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/textLine" }
+        },
+        "alternatives": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/alternative" }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/warning" }
+        }
+      },
+      "required": [
+        "block_id",
+        "block_type",
+        "bbox",
+        "reading_order_index",
+        "confidence",
+        "provenance",
+        "lines",
+        "alternatives",
+        "warnings"
+      ]
+    },
+    "pageContent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "page_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "page_index": { "type": "integer", "minimum": 0 },
+        "checksum": { "$ref": "common.schema.json#/$defs/checksum" },
+        "width": { "type": "integer", "exclusiveMinimum": 0 },
+        "height": { "type": "integer", "exclusiveMinimum": 0 },
+        "blocks": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/block" }
+        },
+        "reading_order": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "common.schema.json#/$defs/identifier" }
+        },
+        "provenance": { "$ref": "common.schema.json#/$defs/provenance" },
+        "warnings": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/warning" }
+        }
+      },
+      "required": [
+        "page_id",
+        "page_index",
+        "checksum",
+        "width",
+        "height",
+        "blocks",
+        "reading_order",
+        "provenance",
+        "warnings"
+      ]
+    },
+    "manifestSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["synthetic", "redistributable", "reference-only", "private-evaluation"] },
+        "title": { "type": "string", "minLength": 1 },
+        "canonical_source_url": { "type": ["string", "null"] },
+        "source_organization": { "type": ["string", "null"] },
+        "retrieval_date": { "type": ["string", "null"] },
+        "license_status": { "enum": ["verified", "unverified", "unknown", "not_applicable"] },
+        "redistribution": { "enum": ["redistributable", "reference-only", "private-evaluation", "synthetic"] },
+        "notes": { "type": ["string", "null"] }
+      },
+      "required": ["kind", "title", "license_status", "redistribution"]
+    },
+    "manifestPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "page_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "page_index": { "type": "integer", "minimum": 0 },
+        "checksum": { "$ref": "common.schema.json#/$defs/checksum" },
+        "width": { "type": "integer", "exclusiveMinimum": 0 },
+        "height": { "type": "integer", "exclusiveMinimum": 0 },
+        "source_kind": { "enum": ["native_pdf", "scanned_pdf", "image", "synthetic_record", "unknown"] },
+        "tags": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/identifier" }
+        }
+      },
+      "required": ["page_id", "page_index", "checksum", "width", "height", "source_kind", "tags"]
+    },
+    "manifestDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "document_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "split": { "enum": ["dev", "validation", "test-public", "test-private"] },
+        "category": { "$ref": "common.schema.json#/$defs/identifier" },
+        "checksum": { "$ref": "common.schema.json#/$defs/checksum" },
+        "source": { "$ref": "common.schema.json#/$defs/manifestSource" },
+        "pages": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "common.schema.json#/$defs/manifestPage" }
+        }
+      },
+      "required": ["document_id", "split", "category", "checksum", "source", "pages"]
+    },
+    "referenceSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reference_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "title": { "type": "string", "minLength": 1 },
+        "canonical_source_url": { "type": ["string", "null"] },
+        "source_organization": { "type": ["string", "null"] },
+        "retrieval_date": { "type": ["string", "null"] },
+        "license_status": { "enum": ["verified", "unverified", "unknown"] },
+        "redistribution": { "enum": ["reference-only", "redistributable", "private-evaluation"] },
+        "notes": { "type": "string", "minLength": 1 }
+      },
+      "required": [
+        "reference_id",
+        "title",
+        "license_status",
+        "redistribution",
+        "notes"
+      ]
+    },
+    "groundTruthDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "document_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "pages": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "common.schema.json#/$defs/pageContent" }
+        }
+      },
+      "required": ["document_id", "pages"]
+    },
+    "systemMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "adapter_name": { "type": "string", "minLength": 1 },
+        "adapter_version": { "type": "string", "minLength": 1 },
+        "model_name": { "type": ["string", "null"] },
+        "model_version": { "type": ["string", "null"] },
+        "execution_provider": { "type": "string", "minLength": 1 },
+        "command": { "type": ["string", "null"] },
+        "git_commit": { "type": ["string", "null"] },
+        "runtime": { "type": "object", "additionalProperties": true },
+        "hardware": { "type": "object", "additionalProperties": true }
+      },
+      "required": [
+        "name",
+        "version",
+        "adapter_name",
+        "adapter_version",
+        "execution_provider",
+        "runtime",
+        "hardware"
+      ]
+    },
+    "runMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "run_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "started_at": { "type": ["string", "null"], "format": "date-time" },
+        "finished_at": { "type": ["string", "null"], "format": "date-time" },
+        "duration_ms": { "type": ["number", "null"], "minimum": 0 },
+        "command": { "type": ["string", "null"] },
+        "dependency_lock_hash": { "type": ["string", "null"] }
+      },
+      "required": ["run_id"]
+    },
+    "predictionSample": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "document_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "page_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "status": { "enum": ["success", "crashed", "timeout", "missing"] },
+        "page": {
+          "anyOf": [
+            { "$ref": "common.schema.json#/$defs/pageContent" },
+            { "type": "null" }
+          ]
+        },
+        "error": {
+          "anyOf": [
+            { "$ref": "common.schema.json#/$defs/error" },
+            { "type": "null" }
+          ]
+        },
+        "runtime_ms": { "type": ["number", "null"], "minimum": 0 }
+      },
+      "required": ["document_id", "page_id", "status", "page", "error"]
+    },
+    "metricSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "micro": { "type": "number", "minimum": 0 },
+        "macro": { "type": "number", "minimum": 0 },
+        "sample_count": { "type": "integer", "minimum": 0 },
+        "unit": { "enum": ["page", "digit_page"] },
+        "higher_is_better": { "type": "boolean" }
+      },
+      "required": ["micro", "macro", "sample_count", "unit", "higher_is_better"]
+    },
+    "reportSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "total_pages": { "type": "integer", "minimum": 0 },
+        "scored_pages": { "type": "integer", "minimum": 0 },
+        "missing_pages": { "type": "integer", "minimum": 0 },
+        "crashed_pages": { "type": "integer", "minimum": 0 },
+        "timeout_pages": { "type": "integer", "minimum": 0 },
+        "invalid_pages": { "type": "integer", "minimum": 0 },
+        "ground_truth_missing_pages": { "type": "integer", "minimum": 0 }
+      },
+      "required": [
+        "total_pages",
+        "scored_pages",
+        "missing_pages",
+        "crashed_pages",
+        "timeout_pages",
+        "invalid_pages",
+        "ground_truth_missing_pages"
+      ]
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "document_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "page_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "status": { "enum": ["missing", "crashed", "timeout", "invalid", "ground_truth_missing"] },
+        "message": { "type": "string", "minLength": 1 }
+      },
+      "required": ["document_id", "page_id", "status", "message"]
+    },
+    "categoryBreakdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "category": { "$ref": "common.schema.json#/$defs/identifier" },
+        "summary": { "$ref": "common.schema.json#/$defs/reportSummary" },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": { "$ref": "common.schema.json#/$defs/metricSummary" }
+        }
+      },
+      "required": ["category", "summary", "metrics"]
+    }
+  }
+}

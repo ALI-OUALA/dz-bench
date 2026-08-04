@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "report.schema.json",
+  "title": "DZ-Bench structured score report",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "dataset_revision": { "$ref": "common.schema.json#/$defs/datasetRevision" },
+    "coordinate_system": { "$ref": "common.schema.json#/$defs/coordinateSystem" },
+    "system": { "$ref": "common.schema.json#/$defs/systemMetadata" },
+    "run": { "$ref": "common.schema.json#/$defs/runMetadata" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "summary": { "$ref": "common.schema.json#/$defs/reportSummary" },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": { "$ref": "common.schema.json#/$defs/metricSummary" }
+    },
+    "category_breakdown": {
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/categoryBreakdown" }
+    },
+    "failures": {
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/failure" }
+    },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": [
+    "schema_version",
+    "dataset_revision",
+    "coordinate_system",
+    "system",
+    "run",
+    "generated_at",
+    "summary",
+    "metrics",
+    "category_breakdown",
+    "failures",
+    "notes"
+  ]
+}

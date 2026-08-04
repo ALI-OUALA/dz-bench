@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_revision": {
+    "dataset_id": "bac-reference-only",
+    "revision": "0.1.0"
+  },
+  "coordinate_system": {
+    "unit": "pixel",
+    "origin": "top_left",
+    "x_axis": "right",
+    "y_axis": "down"
+  },
+  "documents": [],
+  "reference_sources": [
+    {
+      "reference_id": "bac-reference-template-001",
+      "title": "Algerian Baccalaureate paper reference-only record template",
+      "canonical_source_url": null,
+      "source_organization": null,
+      "retrieval_date": null,
+      "license_status": "unknown",
+      "redistribution": "reference-only",
+      "notes": "Template only. No BAC PDF, page checksum, transcription, or ground truth is asserted or shipped. Populate only after independent source and licence verification."
+    }
+  ],
+  "notes": [
+    "This manifest is a legal/provenance placeholder, not a collected BAC dataset.",
+    "Reference-only records must not cause protected files to be downloaded into version control."
+  ]
+}

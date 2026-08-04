@@ -1,0 +1,25 @@
+# Protected or potentially copyrighted benchmark media must never enter the repo.
+__pycache__/
+datasets/**/*.pdf
+datasets/**/*.PDF
+datasets/**/*.png
+datasets/**/*.jpg
+datasets/**/*.jpeg
+datasets/**/*.tif
+datasets/**/*.tiff
+datasets/**/*.webp
+datasets/**/*.zip
+datasets/**/*.7z
+
+# Local smoke outputs and caches.
+.tmp/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.venv/
+dist/
+build/
+*.egg-info/
+reports/*.json
+reports/*.md
