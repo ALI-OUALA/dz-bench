@@ -62,6 +62,44 @@
       },
       "required": ["x", "y", "width", "height"]
     },
+    "tableCell": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cell_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "row_index": { "type": "integer", "minimum": 0 },
+        "column_index": { "type": "integer", "minimum": 0 },
+        "row_span": { "type": "integer", "minimum": 1 },
+        "column_span": { "type": "integer", "minimum": 1 },
+        "bbox": { "$ref": "common.schema.json#/$defs/boundingBox" },
+        "raw_text": { "type": "string" },
+        "normalized_text": { "type": "string" }
+      },
+      "required": [
+        "cell_id",
+        "row_index",
+        "column_index",
+        "row_span",
+        "column_span",
+        "bbox",
+        "raw_text",
+        "normalized_text"
+      ]
+    },
+    "tableStructure": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rows": { "type": "integer", "minimum": 1 },
+        "columns": { "type": "integer", "minimum": 1 },
+        "cells": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "common.schema.json#/$defs/tableCell" }
+        }
+      },
+      "required": ["rows", "columns", "cells"]
+    },
     "confidence": {
       "type": "object",
       "additionalProperties": false,
@@ -246,6 +284,13 @@
         "lines": {
           "type": "array",
           "items": { "$ref": "common.schema.json#/$defs/textLine" }
+        },
+        "equation_text": { "type": ["string", "null"] },
+        "table": {
+          "anyOf": [
+            { "$ref": "common.schema.json#/$defs/tableStructure" },
+            { "type": "null" }
+          ]
         },
         "alternatives": {
           "type": "array",
@@ -445,7 +490,8 @@
             { "type": "null" }
           ]
         },
-        "runtime_ms": { "type": ["number", "null"], "minimum": 0 }
+        "runtime_ms": { "type": ["number", "null"], "minimum": 0 },
+        "peak_memory_mb": { "type": ["number", "null"], "minimum": 0 }
       },
       "required": ["document_id", "page_id", "status", "page", "error"]
     },
@@ -456,7 +502,17 @@
         "micro": { "type": "number", "minimum": 0 },
         "macro": { "type": "number", "minimum": 0 },
         "sample_count": { "type": "integer", "minimum": 0 },
-        "unit": { "enum": ["page", "digit_page"] },
+        "unit": {
+          "enum": [
+            "page",
+            "digit_page",
+            "block",
+            "equation",
+            "table",
+            "milliseconds",
+            "megabytes"
+          ]
+        },
         "higher_is_better": { "type": "boolean" }
       },
       "required": ["micro", "macro", "sample_count", "unit", "higher_is_better"]

@@ -10,12 +10,14 @@ from statistics import fmean
 
 from .io import load_ground_truth, load_manifest, load_predictions, write_json
 from .metrics import (
-    character_error_rate,
     conservative_normalize,
     digit_exact_accuracy,
     edit_distance,
+    equation_text_page_score,
+    greedy_block_matches,
+    layout_scores,
     reading_order_sequence_score,
-    word_error_rate,
+    table_structure_page_score,
 )
 from .models import (
     CategoryBreakdown,
@@ -29,13 +31,34 @@ from .models import (
     ReportSummary,
 )
 
-METRIC_NAMES = (
+QUALITY_METRIC_NAMES = (
     "cer",
     "wer",
     "normalized_edit_similarity",
     "digit_exact_accuracy",
     "reading_order_sequence_score",
+    "block_type_accuracy",
+    "layout_bbox_iou",
+    "layout_match_f1",
+    "equation_text_similarity",
+    "table_structure_similarity",
 )
+PERFORMANCE_METRIC_NAMES = ("runtime_ms", "peak_memory_mb")
+METRIC_NAMES = QUALITY_METRIC_NAMES
+_METRIC_SPECS = {
+    "cer": ("page", False),
+    "wer": ("page", False),
+    "normalized_edit_similarity": ("page", True),
+    "digit_exact_accuracy": ("digit_page", True),
+    "reading_order_sequence_score": ("page", True),
+    "block_type_accuracy": ("block", True),
+    "layout_bbox_iou": ("block", True),
+    "layout_match_f1": ("block", True),
+    "equation_text_similarity": ("equation", True),
+    "table_structure_similarity": ("table", True),
+    "runtime_ms": ("milliseconds", False),
+    "peak_memory_mb": ("megabytes", False),
+}
 
 
 @dataclass(slots=True)
@@ -61,21 +84,19 @@ class _Counts:
 
 
 @dataclass(slots=True)
+class _MetricValue:
+    value: float
+    numerator: float
+    denominator: float
+    sample_count: int
+    unit: str
+    higher_is_better: bool
+
+
+@dataclass(slots=True)
 class _Observation:
     category: str
-    cer: float
-    wer: float
-    similarity: float
-    digit: float | None
-    reading_order: float
-    cer_errors: int
-    cer_units: int
-    wer_errors: int
-    wer_units: int
-    similarity_errors: int
-    similarity_units: int
-    order_errors: int
-    order_units: int
+    metrics: dict[str, _MetricValue]
 
 
 def _flatten_lines(page: PageContent) -> list:
@@ -90,10 +111,24 @@ def _page_text(page: PageContent) -> str:
     return "\n".join(line.normalized_text for line in _flatten_lines(page))
 
 
-def _line_order(page: PageContent) -> list[str]:
-    if page.reading_order:
-        return list(page.reading_order)
-    return [line.line_id for line in _flatten_lines(page)]
+def _comparable_block_order(
+    reference: PageContent, hypothesis: PageContent
+) -> tuple[list[str], list[str]]:
+    """Map system-local prediction IDs onto reference blocks through geometry."""
+
+    reference_blocks = sorted(reference.blocks, key=lambda item: item.reading_order_index)
+    hypothesis_blocks = sorted(hypothesis.blocks, key=lambda item: item.reading_order_index)
+    reference_order = [block.block_id for block in reference_blocks]
+    mapping = {
+        match.hypothesis.block_id: match.reference.block_id
+        for match in greedy_block_matches(reference_blocks, hypothesis_blocks)
+        if match.hypothesis is not None
+    }
+    hypothesis_order = [
+        mapping.get(block.block_id, f"unmatched:{index}")
+        for index, block in enumerate(hypothesis_blocks)
+    ]
+    return reference_order, hypothesis_order
 
 
 def _observation(category: str, reference: PageContent, hypothesis: PageContent) -> _Observation:
@@ -104,75 +139,150 @@ def _observation(category: str, reference: PageContent, hypothesis: PageContent)
     reference_words = reference_text.split()
     hypothesis_words = hypothesis_text.split()
     normalized_distance = edit_distance(reference_chars, hypothesis_chars)
-    order = _line_order(reference)
-    predicted_order = _line_order(hypothesis)
+    word_distance = edit_distance(reference_words, hypothesis_words)
+    order, predicted_order = _comparable_block_order(reference, hypothesis)
     order_distance = edit_distance(order, predicted_order)
     has_reference_digit = any(character.isdecimal() for character in reference_text)
-    return _Observation(
-        category=category,
-        cer=character_error_rate(reference_text, hypothesis_text),
-        wer=word_error_rate(reference_text, hypothesis_text),
-        similarity=1.0 - normalized_distance / max(len(reference_chars), len(hypothesis_chars), 1),
-        digit=digit_exact_accuracy(reference_text, hypothesis_text)
-        if has_reference_digit
-        else None,
-        reading_order=reading_order_sequence_score(order, predicted_order),
-        cer_errors=edit_distance(reference_chars, hypothesis_chars),
-        cer_units=max(len(reference_chars), 1),
-        wer_errors=edit_distance(reference_words, hypothesis_words),
-        wer_units=max(len(reference_words), 1),
-        similarity_errors=normalized_distance,
-        similarity_units=max(len(reference_chars), len(hypothesis_chars), 1),
-        order_errors=order_distance,
-        order_units=max(len(order), len(predicted_order), 1),
-    )
+    similarity_units = max(len(reference_chars), len(hypothesis_chars), 1)
+    order_units = max(len(order), len(predicted_order), 1)
+    metrics = {
+        "cer": _MetricValue(
+            normalized_distance / max(len(reference_chars), 1),
+            normalized_distance,
+            max(len(reference_chars), 1),
+            1,
+            "page",
+            False,
+        ),
+        "wer": _MetricValue(
+            word_distance / max(len(reference_words), 1),
+            word_distance,
+            max(len(reference_words), 1),
+            1,
+            "page",
+            False,
+        ),
+        "normalized_edit_similarity": _MetricValue(
+            1.0 - normalized_distance / similarity_units,
+            similarity_units - normalized_distance,
+            similarity_units,
+            1,
+            "page",
+            True,
+        ),
+        "reading_order_sequence_score": _MetricValue(
+            reading_order_sequence_score(order, predicted_order),
+            order_units - order_distance,
+            order_units,
+            1,
+            "page",
+            True,
+        ),
+    }
+    if has_reference_digit:
+        digit_accuracy = digit_exact_accuracy(reference_text, hypothesis_text)
+        metrics["digit_exact_accuracy"] = _MetricValue(
+            digit_accuracy,
+            digit_accuracy,
+            1,
+            1,
+            "digit_page",
+            True,
+        )
+    layout = layout_scores(reference.blocks, hypothesis.blocks)
+    if layout.block_count:
+        metrics.update(
+            {
+                "block_type_accuracy": _MetricValue(
+                    layout.correct_type / layout.block_count,
+                    layout.correct_type,
+                    layout.block_count,
+                    layout.block_count,
+                    "block",
+                    True,
+                ),
+                "layout_bbox_iou": _MetricValue(
+                    layout.bbox_iou_sum / layout.block_count,
+                    layout.bbox_iou_sum,
+                    layout.block_count,
+                    layout.block_count,
+                    "block",
+                    True,
+                ),
+                "layout_match_f1": _MetricValue(
+                    2
+                    * layout.matched_count
+                    / max(len(reference.blocks) + len(hypothesis.blocks), 1),
+                    2 * layout.matched_count,
+                    max(len(reference.blocks) + len(hypothesis.blocks), 1),
+                    layout.block_count,
+                    "block",
+                    True,
+                ),
+            }
+        )
+    equation_score, equation_count = equation_text_page_score(reference.blocks, hypothesis.blocks)
+    if equation_score is not None:
+        metrics["equation_text_similarity"] = _MetricValue(
+            equation_score,
+            equation_score * equation_count,
+            equation_count,
+            equation_count,
+            "equation",
+            True,
+        )
+    table_score, table_count = table_structure_page_score(reference.blocks, hypothesis.blocks)
+    if table_score is not None:
+        metrics["table_structure_similarity"] = _MetricValue(
+            table_score,
+            table_score * table_count,
+            table_count,
+            table_count,
+            "table",
+            True,
+        )
+    return _Observation(category=category, metrics=metrics)
 
 
-def _metric_summary(rows: list[_Observation], name: str) -> MetricSummary:
-    applicable = [row for row in rows if name != "digit_exact_accuracy" or row.digit is not None]
-    if not applicable:
+def _metric_summary(name: str, values: list[_MetricValue]) -> MetricSummary:
+    unit, higher_is_better = _METRIC_SPECS[name]
+    if not values:
         return MetricSummary(
             micro=0.0,
             macro=0.0,
             sample_count=0,
-            unit="digit_page" if name == "digit_exact_accuracy" else "page",
-            higher_is_better=name not in {"cer", "wer"},
+            unit=unit,
+            higher_is_better=higher_is_better,
         )
-    if name == "cer":
-        micro = sum(row.cer_errors for row in applicable) / sum(row.cer_units for row in applicable)
-        values = [row.cer for row in applicable]
-        higher_is_better = False
-    elif name == "wer":
-        micro = sum(row.wer_errors for row in applicable) / sum(row.wer_units for row in applicable)
-        values = [row.wer for row in applicable]
-        higher_is_better = False
-    elif name == "normalized_edit_similarity":
-        micro = 1.0 - sum(row.similarity_errors for row in applicable) / sum(
-            row.similarity_units for row in applicable
-        )
-        values = [row.similarity for row in applicable]
-        higher_is_better = True
-    elif name == "digit_exact_accuracy":
-        micro = fmean(row.digit for row in applicable if row.digit is not None)
-        values = [row.digit for row in applicable if row.digit is not None]
-        higher_is_better = True
-    else:
-        micro = 1.0 - sum(row.order_errors for row in applicable) / sum(
-            row.order_units for row in applicable
-        )
-        values = [row.reading_order for row in applicable]
-        higher_is_better = True
+    micro = sum(value.numerator for value in values) / max(
+        sum(value.denominator for value in values), 1
+    )
     return MetricSummary(
         micro=micro,
-        macro=fmean(values),
-        sample_count=len(applicable),
-        unit="digit_page" if name == "digit_exact_accuracy" else "page",
+        macro=fmean(value.value for value in values),
+        sample_count=sum(value.sample_count for value in values),
+        unit=unit,
         higher_is_better=higher_is_better,
     )
 
 
-def _metrics(rows: list[_Observation]) -> dict[str, MetricSummary]:
-    return {name: _metric_summary(rows, name) for name in METRIC_NAMES}
+def _metrics(
+    rows: list[_Observation], extras: dict[str, list[_MetricValue]] | None = None
+) -> dict[str, MetricSummary]:
+    values_by_name: dict[str, list[_MetricValue]] = defaultdict(list)
+    for row in rows:
+        for name, value in row.metrics.items():
+            values_by_name[name].append(value)
+    for name, values in (extras or {}).items():
+        values_by_name[name].extend(values)
+    names = list(QUALITY_METRIC_NAMES)
+    names.extend(name for name in PERFORMANCE_METRIC_NAMES if values_by_name.get(name))
+    return {name: _metric_summary(name, values_by_name.get(name, [])) for name in names}
+
+
+def _performance_value(name: str, value: float) -> _MetricValue:
+    unit, higher_is_better = _METRIC_SPECS[name]
+    return _MetricValue(value, value, 1, 1, unit, higher_is_better)
 
 
 def _page_map(manifest: Manifest) -> dict[tuple[str, str], tuple[str, object]]:
@@ -226,6 +336,10 @@ def score(manifest: Manifest, ground_truth: GroundTruth, predictions: Prediction
     category_counts: dict[str, _Counts] = defaultdict(_Counts)
     observations: list[_Observation] = []
     category_observations: dict[str, list[_Observation]] = defaultdict(list)
+    performance_values: dict[str, list[_MetricValue]] = defaultdict(list)
+    category_performance: dict[str, dict[str, list[_MetricValue]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
     failures: list[FailureRecord] = []
 
     for key, (category, manifest_page) in target_pages.items():
@@ -258,6 +372,14 @@ def score(manifest: Manifest, ground_truth: GroundTruth, predictions: Prediction
                 )
             )
             continue
+        for metric_name, measured_value in (
+            ("runtime_ms", sample.runtime_ms),
+            ("peak_memory_mb", sample.peak_memory_mb),
+        ):
+            if measured_value is not None:
+                value = _performance_value(metric_name, measured_value)
+                performance_values[metric_name].append(value)
+                category_performance[category][metric_name].append(value)
         if sample.status in {"crashed", "timeout"}:
             setattr(counts, sample.status, getattr(counts, sample.status) + 1)
             setattr(
@@ -302,7 +424,10 @@ def score(manifest: Manifest, ground_truth: GroundTruth, predictions: Prediction
         CategoryBreakdown(
             category=category,
             summary=category_counts[category].report(),
-            metrics=_metrics(category_observations.get(category, [])),
+            metrics=_metrics(
+                category_observations.get(category, []),
+                category_performance.get(category, {}),
+            ),
         )
         for category in sorted(category_counts)
     ]
@@ -313,13 +438,14 @@ def score(manifest: Manifest, ground_truth: GroundTruth, predictions: Prediction
         run=predictions.run,
         generated_at=datetime.now(UTC),
         summary=counts.report(),
-        metrics=_metrics(observations),
+        metrics=_metrics(observations, performance_values),
         category_breakdown=category_breakdown,
         failures=failures,
         notes=[
             "Missing, crashed, timeout, invalid, and ground-truth-missing pages remain "
             "in the report.",
             "Digit exact accuracy is calculated only for pages containing reference digits.",
+            "Runtime and peak memory summarize measured prediction samples only.",
         ],
     )
 

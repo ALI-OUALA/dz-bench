@@ -8,8 +8,10 @@ The Phase A runtime keeps dependencies small:
 | Typer 0.x | CLI argument handling | MIT |
 | pytest 8.x (development) | Tests | MIT |
 | Ruff 0.x (development) | Lint and formatting | MIT |
+| Pillow 10.x/11.x (optional `raster`) | Deterministic PNG rendering | MIT-CMU |
+| arabic-reshaper 3.x (optional `raster`) | Arabic presentation shaping for fixtures | MIT |
+| python-bidi 0.6.x (optional `raster`) | Unicode bidirectional display ordering for fixtures | LGPL |
 
-Python itself is distributed under the Python Software Foundation License. No OCR model, model weight, protected document, benchmark corpus, copied image, or third-party code asset is bundled by Phase A.
+Python itself is distributed under the Python Software Foundation License. Optional raster packages are installed separately and are not copied into this repository. No OCR model, model weight, protected document, copied image, font, or third-party code asset is bundled.
 
 Dependency versions and licences must be rechecked before adding adapters, datasets, models, or generated assets. Model and dataset licences are independent of these package notices.
-

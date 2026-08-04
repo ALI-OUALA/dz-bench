@@ -21,10 +21,30 @@
       "license_status": "unknown",
       "redistribution": "reference-only",
       "notes": "Template only. No BAC PDF, page checksum, transcription, or ground truth is asserted or shipped. Populate only after independent source and licence verification."
+    },
+    {
+      "reference_id": "local-private-bac-english-1093098",
+      "title": "Local BAC English paper candidate (filename dzexams-bac-anglais-1093098.pdf)",
+      "canonical_source_url": null,
+      "source_organization": "dzexams.com (inferred from watermark; unverified)",
+      "retrieval_date": null,
+      "license_status": "unknown",
+      "redistribution": "private-evaluation",
+      "notes": "Inspected locally on 2026-08-04; 1,089,752 bytes; 6 pages; source SHA-256 31e7a5a709379cfa5731de42fe26eb36ea331ca3c593fbba8ded19241f9755bc. Every page has only a sparse watermark text layer over an image and must route to OCR. File, page images, and ground truth are not distributed."
+    },
+    {
+      "reference_id": "local-private-bac-math-2018-gest-econ",
+      "title": "Local 2018 BAC mathematics paper and solution candidate, Gestion et Economie",
+      "canonical_source_url": null,
+      "source_organization": "dzexams.com (inferred from filename; unverified)",
+      "retrieval_date": null,
+      "license_status": "unknown",
+      "redistribution": "private-evaluation",
+      "notes": "Inspected locally on 2026-08-04; 2,317,946 bytes; 10 pages; source SHA-256 7cd97a20dac6eaa8425d8e83e3dea2dc65eacb91559983c698694ed889b0c592. Native layers contain private-use math glyphs or control-character corruption, so the quality gate routes them to OCR. File, page images, and ground truth are not distributed."
     }
   ],
   "notes": [
-    "This manifest is a legal/provenance placeholder, not a collected BAC dataset.",
+    "This manifest contains provenance-only and private-evaluation records, not a distributed BAC dataset.",
     "Reference-only records must not cause protected files to be downloaded into version control."
   ]
 }

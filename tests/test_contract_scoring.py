@@ -79,3 +79,26 @@ def test_reference_only_manifest_has_no_documents() -> None:
     manifest = load_manifest(path)
     assert manifest.documents == []
     assert manifest.reference_sources[0].redistribution == "reference-only"
+
+
+def test_reading_order_does_not_compare_system_local_ids() -> None:
+    corpus = generate_corpus(seed=4, document_count=1)
+    page = corpus.ground_truth.documents[0].pages[0]
+    hypothesis = page.model_copy(deep=True)
+    for index, block in enumerate(hypothesis.blocks):
+        block.block_id = f"prediction-block-{index}"
+        for line_index, line in enumerate(block.lines):
+            line.line_id = f"prediction-line-{index}-{line_index}"
+    hypothesis.reading_order = [
+        line.line_id
+        for block in sorted(hypothesis.blocks, key=lambda value: value.reading_order_index)
+        for line in block.lines
+    ]
+    prediction = PredictionSample(
+        document_id=corpus.ground_truth.documents[0].document_id,
+        page_id=page.page_id,
+        status="success",
+        page=hypothesis,
+    )
+    report = score(corpus.manifest, corpus.ground_truth, _predictions(corpus, [prediction]))
+    assert report.metrics["reading_order_sequence_score"].micro == 1.0

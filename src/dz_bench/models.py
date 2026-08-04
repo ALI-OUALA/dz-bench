@@ -79,6 +79,35 @@ class BoundingBox(ContractModel):
     height: float = Field(gt=0)
 
 
+class TableCell(ContractModel):
+    cell_id: Identifier
+    row_index: int = Field(ge=0)
+    column_index: int = Field(ge=0)
+    row_span: int = Field(default=1, ge=1)
+    column_span: int = Field(default=1, ge=1)
+    bbox: BoundingBox
+    raw_text: str = ""
+    normalized_text: str = ""
+
+
+class TableStructure(ContractModel):
+    rows: int = Field(ge=1)
+    columns: int = Field(ge=1)
+    cells: list[TableCell] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def cells_fit_grid(self) -> TableStructure:
+        cell_ids = [cell.cell_id for cell in self.cells]
+        if len(cell_ids) != len(set(cell_ids)):
+            raise ValueError("table cell IDs must be unique")
+        for cell in self.cells:
+            if cell.row_index + cell.row_span > self.rows:
+                raise ValueError(f"table cell {cell.cell_id} exceeds row count")
+            if cell.column_index + cell.column_span > self.columns:
+                raise ValueError(f"table cell {cell.cell_id} exceeds column count")
+        return self
+
+
 class Confidence(ContractModel):
     score: float = Field(ge=0, le=1)
     calibrated: bool = False
@@ -165,6 +194,8 @@ class Block(ContractModel):
     confidence: Confidence
     provenance: Provenance
     lines: list[TextLine] = Field(default_factory=list)
+    equation_text: str | None = None
+    table: TableStructure | None = None
     alternatives: list[RecognitionAlternative] = Field(default_factory=list)
     warnings: list[ProcessingWarning] = Field(default_factory=list)
 
@@ -315,6 +346,7 @@ class PredictionSample(ContractModel):
     page: PageContent | None = None
     error: ProcessingError | None = None
     runtime_ms: float | None = Field(default=None, ge=0)
+    peak_memory_mb: float | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
     def status_has_matching_payload(self) -> PredictionSample:
@@ -343,11 +375,22 @@ class Predictions(ContractModel):
         return self
 
 
+MetricUnit = Literal[
+    "page",
+    "digit_page",
+    "block",
+    "equation",
+    "table",
+    "milliseconds",
+    "megabytes",
+]
+
+
 class MetricSummary(ContractModel):
     micro: float = Field(ge=0)
     macro: float = Field(ge=0)
     sample_count: int = Field(ge=0)
-    unit: Literal["page", "digit_page"]
+    unit: MetricUnit
     higher_is_better: bool
 
 

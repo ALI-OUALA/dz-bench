@@ -18,7 +18,7 @@ from .io import (
     write_json,
 )
 from .scoring import score_files, write_report_markdown
-from .synthetic import generate_corpus, write_corpus
+from .synthetic import generate_corpus, write_bac_corpus, write_corpus
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
 
@@ -34,6 +34,46 @@ def synthetic_command(
     records: bool = typer.Option(False, "--records", help="Also emit plain JSON page records."),
 ) -> None:
     outputs = write_corpus(output_dir, seed, documents, pages, records)
+    for name, path in outputs.items():
+        typer.echo(f"{name}: {path}")
+
+
+@app.command("bac-synthetic")
+def bac_synthetic_command(
+    output_dir: Path = typer.Option(
+        ..., "--output-dir", help="Directory for the records-only BAC-like corpus."
+    ),
+    seed: int = typer.Option(17, help="Deterministic generator seed."),
+    repeats: int = typer.Option(1, min=1, help="Repeat the balanced scenario set."),
+) -> None:
+    outputs = write_bac_corpus(output_dir, seed, repeats)
+    for name, path in outputs.items():
+        typer.echo(f"{name}: {path}")
+
+
+@app.command("bac-images")
+def bac_images_command(
+    font: Path = typer.Option(
+        ...,
+        "--font",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="External TTF/OTF font used for rendering; no font is bundled.",
+    ),
+    output_dir: Path = typer.Option(
+        ..., "--output-dir", help="Directory for the PNG evaluation bundle."
+    ),
+    seed: int = typer.Option(17, help="Deterministic generator seed."),
+    repeats: int = typer.Option(1, min=1, help="Repeat the balanced scenario set."),
+) -> None:
+    from .raster import write_bac_images
+
+    try:
+        outputs = write_bac_images(output_dir, font, seed, repeats)
+    except (FileNotFoundError, RuntimeError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
     for name, path in outputs.items():
         typer.echo(f"{name}: {path}")
 

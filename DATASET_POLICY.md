@@ -6,7 +6,7 @@ The default treatment for an Algerian Baccalaureate or other third-party documen
 
 The repository currently ships no protected BAC PDF and no BAC ground truth. The checked-in BAC manifest is a template with no asserted source URL or checksum. Rights-unclear material remains local/private and is excluded by `.gitignore`.
 
-Synthetic Phase A records are authored for this project and are deliberately not transcriptions or paraphrases of exam papers. Synthetic scores must always be reported separately from real BAC scores.
+Synthetic records, including the `bac-synthetic` profile, are authored for this project and are deliberately not transcriptions or paraphrases of exam papers. The base BAC-like fixture is records-only; the optional `bac-images` command creates local PNG derivatives from those records without bundling a font. Synthetic scores must always be reported separately from real BAC scores.
 
 For a future source record, reviewers must verify:
 
@@ -16,4 +16,3 @@ For a future source record, reviewers must verify:
 - split assignment by source document, with duplicate and near-duplicate checks.
 
 If a rights holder requests removal, stop distribution of the affected artifact, preserve only the minimum provenance needed to identify it, and contact the repository owner through the project’s authorized channel. Do not replace a removed source with an invented transcription.
-
