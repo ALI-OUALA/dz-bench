@@ -18,6 +18,7 @@ from .io import (
     load_schema,
     write_json,
 )
+from .runner import RunnerLimits, run_system
 from .scoring import score_files, write_report_markdown
 from .synthetic import generate_corpus, write_bac_corpus, write_corpus
 
@@ -163,6 +164,34 @@ def validate_command(
         raise typer.BadParameter(f"unknown contract kind: {kind}", param_hint="--kind")
     loader(path)
     typer.echo(f"valid {kind}: {path}")
+
+
+@app.command("run")
+def run_command(
+    bundle_dir: Path = typer.Option(..., "--bundle", exists=True, file_okay=False),
+    output: Path = typer.Option(..., "--output"),
+    system_name: str = typer.Option(..., "--system-name"),
+    system_version: str = typer.Option("unknown", "--system-version"),
+    timeout_seconds: float = typer.Option(600, "--timeout", min=0.1),
+    command: list[str] = typer.Argument(
+        ..., help="Command and arguments; supports {bundle} and {predictions}."
+    ),
+) -> None:
+    """Run any OCR engine as a black box and preserve failures in predictions."""
+
+    result = run_system(
+        command,
+        bundle_dir=bundle_dir,
+        output_path=output,
+        system_name=system_name,
+        system_version=system_version,
+        limits=RunnerLimits(timeout_seconds=timeout_seconds),
+    )
+    typer.echo(f"status: {result.status}")
+    typer.echo(f"duration_ms: {result.duration_ms:.3f}")
+    typer.echo(f"predictions: {result.predictions_path}")
+    if result.status != "success":
+        raise typer.Exit(1)
 
 
 @app.command("schema")

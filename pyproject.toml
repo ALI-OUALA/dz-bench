@@ -17,9 +17,15 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "httpx>=0.28,<1",
   "pyright>=1.1.408,<2",
   "pytest>=8,<9",
   "ruff>=0.6,<1",
+]
+service = [
+  "fastapi>=0.116,<1",
+  "python-multipart>=0.0.20,<1",
+  "uvicorn[standard]>=0.35,<1",
 ]
 raster = [
   "Pillow>=10,<12",
@@ -29,6 +35,7 @@ raster = [
 
 [project.scripts]
 dz-bench = "dz_bench.cli:app"
+dz-bench-api = "dz_bench.api:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/dz_bench"]

@@ -15,6 +15,9 @@ Phase A plus the synthetic BAC slice provides:
 - an original four-quality Algerian invoice pack with fictional NIF/NIS/RC values,
   line-item tables, HT/TVA/TTC arithmetic, source coordinates, and validations;
 - a public JSON adapter boundary for DzDoc predictions;
+- a shell-free black-box runner that turns crashes, timeouts, missing, and invalid
+  artifacts into explicit per-page failures instead of dropping them;
+- a stateless multipart scoring API and OCI image for private or CI evaluation;
 - a provenance-only BAC manifest with no protected documents or fabricated BAC ground truth.
 
 ## Install and verify
@@ -105,6 +108,25 @@ dz-bench score `
 ```
 
 The scorer writes both `.tmp/report.json` and `.tmp/report.md`. Prediction samples must declare `success`, `crashed`, `timeout`, or `missing`; an omitted sample is also counted as missing.
+
+Run any engine through the public bundle contract (the command receives no
+ground truth):
+
+```powershell
+dz-bench run --bundle .tmp/bac-images --output .tmp/predictions.json `
+  --system-name my-ocr --timeout 600 -- `
+  my-ocr --bundle "{bundle}" --output "{predictions}"
+```
+
+The runner does not invoke a shell. It bounds runtime and artifact size,
+validates the resulting JSON Schema, and emits failure samples when the process
+crashes, times out, or writes invalid output. Containerized engines use the same
+command contract by mounting the bundle read-only and predictions writable.
+
+The optional private scoring API runs with `uv sync --extra service` then
+`dz-bench-api`, or from `Dockerfile`. `POST /v1/score` accepts manifest,
+ground-truth, and prediction JSON files; it is stateless and does not persist
+documents or reports.
 
 ## Public schemas
 
