@@ -10,6 +10,10 @@ Phase A plus the synthetic BAC slice provides:
 - failure-aware scoring that counts missing, crashed, timed-out, invalid, and ground-truth-missing pages;
 - an original deterministic Arabic/French/mixed BAC-like corpus with mathematics, physics, equations, tables, diagrams, reading-order, and clean/compressed/skewed/photographed tags;
 - per-sample runtime and peak-memory fields with report summaries when a system measures them;
+- confidence calibration, hallucination, diagram, structured-field, financial-value,
+  structured-coordinate, and structured-hallucination metrics;
+- an original four-quality Algerian invoice pack with fictional NIF/NIS/RC values,
+  line-item tables, HT/TVA/TTC arithmetic, source coordinates, and validations;
 - a public JSON adapter boundary for DzDoc predictions;
 - a provenance-only BAC manifest with no protected documents or fabricated BAC ground truth.
 
@@ -62,6 +66,19 @@ dz-bench bac-images `
 ```
 
 `bac-images` writes `images/*.png`, a ground-truth-free `assets.json` index, generator provenance in `records.json`, `source_kind: image`, and SHA-256 checksums over actual PNG bytes. OCR engines receive `manifest.json` plus `assets.json`; they never need authored record text. Clean, compressed, skewed, and photographed variants keep canonical page geometry and ground-truth boxes. No font is bundled.
+
+Render the original invoice pack:
+
+```powershell
+dz-bench invoice-images `
+  --font C:\Windows\Fonts\arial.ttf `
+  --output-dir .tmp/invoice-images `
+  --seed 23
+```
+
+This writes four quality variants plus public manifests, ground truth, and a
+ground-truth-free asset index. Company names and Algerian-format identifiers are
+fictional. See `docs/reports/invoice-dz-2026-08-09.md` for the first comparison.
 
 Run complete synthetic generation -> public prediction -> scorer -> JSON/Markdown
 report path:

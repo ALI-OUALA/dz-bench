@@ -6,7 +6,7 @@ import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from .models import Block, BoundingBox, TableStructure
+from .models import Block, BoundingBox, DocumentExtraction, TableStructure
 
 
 def conservative_normalize(text: str) -> str:
@@ -79,6 +79,56 @@ def reading_order_sequence_score(reference: Sequence[str], hypothesis: Sequence[
     return _similarity(list(reference), list(hypothesis))
 
 
+def confidence_brier_score(outcomes: Sequence[int], confidences: Sequence[float]) -> float:
+    if len(outcomes) != len(confidences) or not outcomes:
+        raise ValueError("outcomes and confidences must have the same non-zero length")
+    squared_error = sum(
+        (confidence - outcome) ** 2 for outcome, confidence in zip(outcomes, confidences)
+    )
+    return squared_error / len(outcomes)
+
+
+def expected_calibration_error(
+    outcomes: Sequence[int], confidences: Sequence[float], *, bins: int = 10
+) -> float:
+    if len(outcomes) != len(confidences) or not outcomes:
+        raise ValueError("outcomes and confidences must have the same non-zero length")
+    if bins <= 0:
+        raise ValueError("bins must be positive")
+    total = len(outcomes)
+    error = 0.0
+    for index in range(bins):
+        lower = index / bins
+        upper = (index + 1) / bins
+        members = [
+            position
+            for position, confidence in enumerate(confidences)
+            if (lower <= confidence <= upper if index == bins - 1 else lower <= confidence < upper)
+        ]
+        if members:
+            accuracy = sum(outcomes[position] for position in members) / len(members)
+            mean_confidence = sum(confidences[position] for position in members) / len(members)
+            error += len(members) / total * abs(accuracy - mean_confidence)
+    return error
+
+
+def error_detection_auroc(errors: Sequence[bool], uncertainty: Sequence[float]) -> float:
+    """Return pairwise AUROC; 1 means every error is ranked more uncertain."""
+
+    if len(errors) != len(uncertainty) or not errors:
+        raise ValueError("errors and uncertainty must have the same non-zero length")
+    positives = [score for error, score in zip(errors, uncertainty) if error]
+    negatives = [score for error, score in zip(errors, uncertainty) if not error]
+    if not positives or not negatives:
+        raise ValueError("AUROC requires at least one error and one correct prediction")
+    wins = sum(
+        1.0 if positive > negative else 0.5 if positive == negative else 0.0
+        for positive in positives
+        for negative in negatives
+    )
+    return wins / (len(positives) * len(negatives))
+
+
 def bounding_box_iou(first: BoundingBox, second: BoundingBox) -> float:
     """Return intersection over union for canonical top-left pixel boxes."""
 
@@ -89,6 +139,70 @@ def bounding_box_iou(first: BoundingBox, second: BoundingBox) -> float:
     intersection = max(0.0, right - left) * max(0.0, bottom - top)
     union = first.width * first.height + second.width * second.height - intersection
     return intersection / union if union else 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class StructuredFieldScores:
+    precision: float
+    recall: float
+    f1: float
+    exact_accuracy: float
+    financial_accuracy: float
+    coordinate_iou: float
+    hallucination_rate: float
+    reference_count: int
+    hypothesis_count: int
+
+
+_FINANCIAL_FIELD_PARTS = ("ht", "tva", "ttc", "quantity", "unit_price", "line_total")
+
+
+def structured_field_scores(
+    reference: DocumentExtraction, hypothesis: DocumentExtraction
+) -> StructuredFieldScores:
+    """Align repeated fields by name and occurrence, then score exact normalized values."""
+
+    reference_by_name: dict[str, list] = {}
+    hypothesis_by_name: dict[str, list] = {}
+    for field in reference.fields:
+        reference_by_name.setdefault(field.field_name, []).append(field)
+    for field in hypothesis.fields:
+        hypothesis_by_name.setdefault(field.field_name, []).append(field)
+    exact = 0
+    financial_exact = 0
+    financial_count = 0
+    coordinate_scores: list[float] = []
+    hallucinated = 0
+    for name in set(reference_by_name) | set(hypothesis_by_name):
+        expected = reference_by_name.get(name, [])
+        predicted = hypothesis_by_name.get(name, [])
+        hallucinated += max(0, len(predicted) - len(expected))
+        for index, reference_field in enumerate(expected):
+            is_financial = any(part in name for part in _FINANCIAL_FIELD_PARTS)
+            financial_count += int(is_financial)
+            if index >= len(predicted):
+                continue
+            hypothesis_field = predicted[index]
+            matches = reference_field.normalized_value == hypothesis_field.normalized_value
+            exact += int(matches)
+            financial_exact += int(matches and is_financial)
+            if matches and reference_field.bbox is not None and hypothesis_field.bbox is not None:
+                coordinate_scores.append(
+                    bounding_box_iou(reference_field.bbox, hypothesis_field.bbox)
+                )
+    precision = exact / max(len(hypothesis.fields), 1)
+    recall = exact / max(len(reference.fields), 1)
+    return StructuredFieldScores(
+        precision=precision,
+        recall=recall,
+        f1=2 * precision * recall / max(precision + recall, 1e-12),
+        exact_accuracy=recall,
+        financial_accuracy=financial_exact / max(financial_count, 1),
+        coordinate_iou=sum(coordinate_scores) / max(len(coordinate_scores), 1),
+        hallucination_rate=hallucinated / max(len(hypothesis.fields), 1),
+        reference_count=len(reference.fields),
+        hypothesis_count=len(hypothesis.fields),
+    )
 
 
 @dataclass(frozen=True, slots=True)

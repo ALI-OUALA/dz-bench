@@ -6,10 +6,13 @@ from pydantic import ValidationError
 
 from dz_bench.io import load_manifest, load_schema, validate_instance
 from dz_bench.models import (
+    DocumentExtraction,
     Predictions,
     PredictionSample,
     ProcessingError,
+    Provenance,
     RunMetadata,
+    StructuredField,
     SystemMetadata,
 )
 from dz_bench.scoring import score
@@ -101,6 +104,72 @@ def test_generated_artifacts_match_public_json_schemas() -> None:
     invalid.pop("dataset_revision")
     with pytest.raises(JsonSchemaValidationError):
         validate_instance(invalid, "manifest")
+
+
+def test_structured_extractions_round_trip_through_prediction_schema() -> None:
+    corpus = generate_corpus(seed=8, document_count=1)
+    document_id = corpus.ground_truth.documents[0].document_id
+    extraction = DocumentExtraction(
+        document_id=document_id,
+        schema_name="invoice-dz",
+        schema_version="1.0.0",
+        fields=[
+            StructuredField(
+                field_id="invoice-number",
+                field_name="invoice_number",
+                value="FA-42",
+                normalized_value="FA-42",
+                value_type="identifier",
+                confidence={"score": 0.9},
+                provenance=Provenance(kind="system_prediction", source="fixture"),
+            )
+        ],
+    )
+    predictions = _predictions(corpus, [])
+    predictions.document_extractions.append(extraction)
+
+    validate_instance(predictions.model_dump(mode="json"), "prediction")
+
+
+def test_report_scores_confidence_hallucination_and_structured_fields() -> None:
+    corpus = generate_corpus(seed=9, document_count=1)
+    truth_document = corpus.ground_truth.documents[0]
+    extraction = DocumentExtraction(
+        document_id=truth_document.document_id,
+        schema_name="invoice-dz",
+        schema_version="1.0.0",
+        fields=[
+            StructuredField(
+                field_id="total-ttc",
+                field_name="total_ttc",
+                value="1190.00",
+                normalized_value="1190.00",
+                value_type="decimal",
+                confidence={"score": 1.0, "calibrated": True},
+                provenance=Provenance(kind="human_annotation", source="fixture"),
+            )
+        ],
+    )
+    truth_document.extractions.append(extraction)
+    predictions = _predictions(
+        corpus,
+        [
+            PredictionSample(
+                document_id=truth_document.document_id,
+                page_id=truth_document.pages[0].page_id,
+                status="success",
+                page=truth_document.pages[0],
+            )
+        ],
+    )
+    predictions.document_extractions.append(extraction)
+
+    report = score(corpus.manifest, corpus.ground_truth, predictions)
+
+    assert report.metrics["confidence_brier"].micro == 0.0
+    assert report.metrics["hallucinated_block_rate"].micro == 0.0
+    assert report.metrics["structured_field_f1"].micro == 1.0
+    assert report.metrics["financial_value_accuracy"].micro == 1.0
 
 
 def test_reference_only_manifest_has_no_documents() -> None:

@@ -8,7 +8,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 
 Identifier = Annotated[
     str,
@@ -129,6 +129,21 @@ class ProcessingError(ContractModel):
     retryable: bool = False
 
 
+class ProcessingEvent(ContractModel):
+    event_id: Identifier
+    stage: str = Field(min_length=1)
+    status: Literal["attempted", "accepted", "rejected", "failed", "skipped"]
+    trigger: str = Field(min_length=1)
+    adapter_name: str = Field(min_length=1)
+    adapter_version: str = Field(min_length=1)
+    model_name: str | None = None
+    model_revision: str | None = None
+    confidence_before: float | None = Field(default=None, ge=0, le=1)
+    confidence_after: float | None = Field(default=None, ge=0, le=1)
+    duration_ms: float | None = Field(default=None, ge=0)
+    details: dict[str, str | int | float | bool] = Field(default_factory=dict)
+
+
 class Provenance(ContractModel):
     kind: Literal[
         "human_annotation",
@@ -211,6 +226,7 @@ class PageContent(ContractModel):
     reading_order: list[Identifier] = Field(default_factory=list)
     provenance: Provenance
     warnings: list[ProcessingWarning] = Field(default_factory=list)
+    events: list[ProcessingEvent] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def reading_order_references_known_units(self) -> PageContent:
@@ -328,6 +344,7 @@ class AssetIndex(ContractModel):
 class GroundTruthDocument(ContractModel):
     document_id: Identifier
     pages: list[PageContent] = Field(min_length=1)
+    extractions: list[DocumentExtraction] = Field(default_factory=list)
 
 
 class GroundTruth(ContractModel):
@@ -391,6 +408,34 @@ class PredictionSample(ContractModel):
         return self
 
 
+class ValidationResult(ContractModel):
+    rule: Identifier
+    status: Literal["pass", "fail", "review"]
+    message: str = Field(min_length=1)
+    confidence: float = Field(ge=0, le=1)
+
+
+class StructuredField(ContractModel):
+    field_id: Identifier
+    field_name: str = Field(min_length=1, max_length=200)
+    value: str
+    normalized_value: str
+    value_type: Literal["string", "date", "identifier", "decimal", "currency"]
+    confidence: Confidence
+    page_id: Identifier | None = None
+    bbox: BoundingBox | None = None
+    provenance: Provenance
+    warnings: list[ProcessingWarning] = Field(default_factory=list)
+
+
+class DocumentExtraction(ContractModel):
+    document_id: Identifier
+    schema_name: Identifier
+    schema_version: str = Field(pattern=r"^\d+\.\d+\.\d+$")
+    fields: list[StructuredField] = Field(default_factory=list)
+    validations: list[ValidationResult] = Field(default_factory=list)
+
+
 class Predictions(ContractModel):
     schema_version: str = Field(default=SCHEMA_VERSION, pattern=r"^\d+\.\d+\.\d+$")
     dataset_revision: DatasetRevision
@@ -398,12 +443,19 @@ class Predictions(ContractModel):
     system: SystemMetadata
     run: RunMetadata
     samples: list[PredictionSample] = Field(default_factory=list)
+    document_extractions: list[DocumentExtraction] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def unique_sample_ids(self) -> Predictions:
         keys = [(sample.document_id, sample.page_id) for sample in self.samples]
         if len(keys) != len(set(keys)):
             raise ValueError("duplicate prediction sample")
+        extraction_keys = [
+            (value.document_id, value.schema_name, value.schema_version)
+            for value in self.document_extractions
+        ]
+        if len(extraction_keys) != len(set(extraction_keys)):
+            raise ValueError("duplicate document extraction")
         return self
 
 
@@ -415,6 +467,10 @@ MetricUnit = Literal[
     "table",
     "milliseconds",
     "megabytes",
+    "field",
+    "financial_value",
+    "confidence_block",
+    "diagram",
 ]
 
 

@@ -79,6 +79,32 @@ def bac_images_command(
         typer.echo(f"{name}: {path}")
 
 
+@app.command("invoice-images")
+def invoice_images_command(
+    font: Path = typer.Option(
+        ...,
+        "--font",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="External TTF/OTF font used for rendering; no font is bundled.",
+    ),
+    output_dir: Path = typer.Option(
+        ..., "--output-dir", help="Directory for the synthetic invoice PNG bundle."
+    ),
+    seed: int = typer.Option(17, help="Deterministic generator seed."),
+) -> None:
+    from .raster import write_invoice_images
+
+    try:
+        outputs = write_invoice_images(output_dir, font, seed)
+    except (FileNotFoundError, RuntimeError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    for name, path in outputs.items():
+        typer.echo(f"{name}: {path}")
+
+
 @app.command("smoke")
 def smoke_command(
     output_dir: Path = typer.Option(..., "--output-dir", help="Directory for smoke artifacts."),

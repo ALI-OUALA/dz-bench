@@ -132,6 +132,33 @@
       },
       "required": ["code", "message", "retryable"]
     },
+    "processingEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "event_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "stage": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["attempted", "accepted", "rejected", "failed", "skipped"] },
+        "trigger": { "type": "string", "minLength": 1 },
+        "adapter_name": { "type": "string", "minLength": 1 },
+        "adapter_version": { "type": "string", "minLength": 1 },
+        "model_name": { "type": ["string", "null"] },
+        "model_revision": { "type": ["string", "null"] },
+        "confidence_before": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "confidence_after": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "duration_ms": { "type": ["number", "null"], "minimum": 0 },
+        "details": { "type": "object", "additionalProperties": true }
+      },
+      "required": [
+        "event_id",
+        "stage",
+        "status",
+        "trigger",
+        "adapter_name",
+        "adapter_version",
+        "details"
+      ]
+    },
     "provenance": {
       "type": "object",
       "additionalProperties": false,
@@ -335,6 +362,10 @@
         "warnings": {
           "type": "array",
           "items": { "$ref": "common.schema.json#/$defs/warning" }
+        },
+        "events": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/processingEvent" }
         }
       },
       "required": [
@@ -455,9 +486,81 @@
           "type": "array",
           "minItems": 1,
           "items": { "$ref": "common.schema.json#/$defs/pageContent" }
+        },
+        "extractions": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/documentExtraction" }
         }
       },
       "required": ["document_id", "pages"]
+    },
+    "validationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rule": { "$ref": "common.schema.json#/$defs/identifier" },
+        "status": { "enum": ["pass", "fail", "review"] },
+        "message": { "type": "string", "minLength": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "required": ["rule", "status", "message", "confidence"]
+    },
+    "structuredField": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "field_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "field_name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "value": { "type": "string" },
+        "normalized_value": { "type": "string" },
+        "value_type": { "enum": ["string", "date", "identifier", "decimal", "currency"] },
+        "confidence": { "$ref": "common.schema.json#/$defs/confidence" },
+        "page_id": {
+          "anyOf": [
+            { "$ref": "common.schema.json#/$defs/identifier" },
+            { "type": "null" }
+          ]
+        },
+        "bbox": {
+          "anyOf": [
+            { "$ref": "common.schema.json#/$defs/boundingBox" },
+            { "type": "null" }
+          ]
+        },
+        "provenance": { "$ref": "common.schema.json#/$defs/provenance" },
+        "warnings": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/warning" }
+        }
+      },
+      "required": [
+        "field_id",
+        "field_name",
+        "value",
+        "normalized_value",
+        "value_type",
+        "confidence",
+        "provenance",
+        "warnings"
+      ]
+    },
+    "documentExtraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "document_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "schema_name": { "$ref": "common.schema.json#/$defs/identifier" },
+        "schema_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+        "fields": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/structuredField" }
+        },
+        "validations": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/validationResult" }
+        }
+      },
+      "required": ["document_id", "schema_name", "schema_version", "fields", "validations"]
     },
     "systemMetadata": {
       "type": "object",
@@ -538,6 +641,10 @@
             "table",
             "milliseconds",
             "megabytes"
+            ,"field"
+            ,"financial_value"
+            ,"confidence_block"
+            ,"diagram"
           ]
         },
         "higher_is_better": { "type": "boolean" }

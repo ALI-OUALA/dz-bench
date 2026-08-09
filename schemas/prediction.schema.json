@@ -13,6 +13,10 @@
     "samples": {
       "type": "array",
       "items": { "$ref": "common.schema.json#/$defs/predictionSample" }
+    },
+    "document_extractions": {
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/documentExtraction" }
     }
   },
   "required": ["schema_version", "dataset_revision", "coordinate_system", "system", "run", "samples"]

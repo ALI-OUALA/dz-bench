@@ -11,17 +11,22 @@ from typing import Literal
 
 from .io import load_ground_truth, load_manifest, load_predictions, write_json
 from .metrics import (
+    confidence_brier_score,
     conservative_normalize,
     digit_exact_accuracy,
     edit_distance,
     equation_text_page_score,
+    error_detection_auroc,
+    expected_calibration_error,
     greedy_block_matches,
     layout_scores,
     reading_order_sequence_score,
+    structured_field_scores,
     table_structure_page_score,
 )
 from .models import (
     CategoryBreakdown,
+    DocumentExtraction,
     FailureRecord,
     GroundTruth,
     Manifest,
@@ -45,6 +50,18 @@ QUALITY_METRIC_NAMES = (
     "layout_match_f1",
     "equation_text_similarity",
     "table_structure_similarity",
+    "diagram_detection_f1",
+    "hallucinated_block_rate",
+    "confidence_brier",
+    "confidence_ece",
+    "error_detection_auroc",
+    "structured_field_precision",
+    "structured_field_recall",
+    "structured_field_f1",
+    "structured_field_exact_accuracy",
+    "financial_value_accuracy",
+    "structured_field_coordinate_iou",
+    "structured_hallucination_rate",
 )
 PERFORMANCE_METRIC_NAMES = ("runtime_ms", "peak_memory_mb")
 METRIC_NAMES = QUALITY_METRIC_NAMES
@@ -59,6 +76,18 @@ _METRIC_SPECS: dict[str, tuple[MetricUnit, bool]] = {
     "layout_match_f1": ("block", True),
     "equation_text_similarity": ("equation", True),
     "table_structure_similarity": ("table", True),
+    "diagram_detection_f1": ("diagram", True),
+    "hallucinated_block_rate": ("block", False),
+    "confidence_brier": ("confidence_block", False),
+    "confidence_ece": ("confidence_block", False),
+    "error_detection_auroc": ("confidence_block", True),
+    "structured_field_precision": ("field", True),
+    "structured_field_recall": ("field", True),
+    "structured_field_f1": ("field", True),
+    "structured_field_exact_accuracy": ("field", True),
+    "financial_value_accuracy": ("financial_value", True),
+    "structured_field_coordinate_iou": ("field", True),
+    "structured_hallucination_rate": ("field", False),
     "runtime_ms": ("milliseconds", False),
     "peak_memory_mb": ("megabytes", False),
 }
@@ -244,7 +273,114 @@ def _observation(category: str, reference: PageContent, hypothesis: PageContent)
             "table",
             True,
         )
+    _add_advanced_page_metrics(metrics, reference, hypothesis)
     return _Observation(category=category, metrics=metrics)
+
+
+def _add_advanced_page_metrics(
+    metrics: dict[str, _MetricValue], reference: PageContent, hypothesis: PageContent
+) -> None:
+    matches = greedy_block_matches(reference.blocks, hypothesis.blocks)
+    by_hypothesis = {
+        match.hypothesis.block_id: match for match in matches if match.hypothesis is not None
+    }
+    outcomes: list[int] = []
+    confidences: list[float] = []
+    for block in hypothesis.blocks:
+        match = by_hypothesis.get(block.block_id)
+        correct = bool(
+            match
+            and match.iou >= 0.5
+            and match.reference.block_type == block.block_type
+            and conservative_normalize(_block_text(match.reference))
+            == conservative_normalize(_block_text(block))
+        )
+        outcomes.append(int(correct))
+        confidences.append(block.confidence.score)
+    if outcomes:
+        count = len(outcomes)
+        brier = confidence_brier_score(outcomes, confidences)
+        ece = expected_calibration_error(outcomes, confidences)
+        metrics["confidence_brier"] = _MetricValue(
+            brier, brier * count, count, count, "confidence_block", False
+        )
+        metrics["confidence_ece"] = _MetricValue(
+            ece, ece * count, count, count, "confidence_block", False
+        )
+        try:
+            auroc = error_detection_auroc(
+                [not bool(outcome) for outcome in outcomes],
+                [1.0 - confidence for confidence in confidences],
+            )
+        except ValueError:
+            pass
+        else:
+            metrics["error_detection_auroc"] = _MetricValue(
+                auroc, auroc * count, count, count, "confidence_block", True
+            )
+    matched_hypotheses = len(by_hypothesis)
+    hypothesis_count = len(hypothesis.blocks)
+    hallucination_rate = (hypothesis_count - matched_hypotheses) / max(hypothesis_count, 1)
+    metrics["hallucinated_block_rate"] = _MetricValue(
+        hallucination_rate,
+        hypothesis_count - matched_hypotheses,
+        max(hypothesis_count, 1),
+        hypothesis_count,
+        "block",
+        False,
+    )
+    reference_diagrams = [
+        block for block in reference.blocks if block.block_type in {"diagram", "figure"}
+    ]
+    hypothesis_diagrams = [
+        block for block in hypothesis.blocks if block.block_type in {"diagram", "figure"}
+    ]
+    if reference_diagrams or hypothesis_diagrams:
+        diagram_matches = greedy_block_matches(reference_diagrams, hypothesis_diagrams)
+        matched = sum(match.hypothesis is not None for match in diagram_matches)
+        denominator = max(len(reference_diagrams) + len(hypothesis_diagrams), 1)
+        metrics["diagram_detection_f1"] = _MetricValue(
+            2 * matched / denominator,
+            2 * matched,
+            denominator,
+            len(reference_diagrams),
+            "diagram",
+            True,
+        )
+
+
+def _block_text(block) -> str:
+    if block.equation_text:
+        return block.equation_text
+    return "\n".join(line.normalized_text for line in block.lines)
+
+
+def _extraction_metrics(
+    reference: DocumentExtraction, hypothesis: DocumentExtraction | None
+) -> dict[str, _MetricValue]:
+    if hypothesis is None:
+        hypothesis = reference.model_copy(update={"fields": [], "validations": []})
+    scores = structured_field_scores(reference, hypothesis)
+    values = {
+        "structured_field_precision": scores.precision,
+        "structured_field_recall": scores.recall,
+        "structured_field_f1": scores.f1,
+        "structured_field_exact_accuracy": scores.exact_accuracy,
+        "financial_value_accuracy": scores.financial_accuracy,
+        "structured_field_coordinate_iou": scores.coordinate_iou,
+        "structured_hallucination_rate": scores.hallucination_rate,
+    }
+    return {
+        name: _MetricValue(
+            value,
+            value,
+            1,
+            max(scores.reference_count, 1),
+            _METRIC_SPECS[name][0],
+            _METRIC_SPECS[name][1],
+        )
+        for name, value in values.items()
+    }
 
 
 def _metric_summary(name: str, values: list[_MetricValue]) -> MetricSummary:
@@ -320,6 +456,19 @@ def validate_bundle(
         raise ValueError("ground truth contains a document or page absent from the manifest")
     if not prediction_keys <= expected:
         raise ValueError("predictions contain a document or page absent from the manifest")
+    expected_documents = {document.document_id for document in manifest.documents}
+    truth_extraction_documents = {
+        extraction.document_id
+        for document in ground_truth.documents
+        for extraction in document.extractions
+    }
+    prediction_extraction_documents = {
+        extraction.document_id for extraction in predictions.document_extractions
+    }
+    if not truth_extraction_documents <= expected_documents:
+        raise ValueError("ground truth extraction references a document absent from the manifest")
+    if not prediction_extraction_documents <= expected_documents:
+        raise ValueError("prediction extraction references a document absent from the manifest")
 
 
 def score(manifest: Manifest, ground_truth: GroundTruth, predictions: Predictions) -> Report:
@@ -423,6 +572,30 @@ def score(manifest: Manifest, ground_truth: GroundTruth, predictions: Prediction
         category_observations[category].append(observation)
         counts.scored += 1
         category_counts[category].scored += 1
+
+    document_categories = {
+        document.document_id: document.category for document in manifest.documents
+    }
+    truth_extractions = {
+        (extraction.document_id, extraction.schema_name, extraction.schema_version): extraction
+        for document in ground_truth.documents
+        for extraction in document.extractions
+    }
+    prediction_extractions = {
+        (extraction.document_id, extraction.schema_name, extraction.schema_version): extraction
+        for extraction in predictions.document_extractions
+    }
+    for key in truth_extractions.keys() | prediction_extractions.keys():
+        reference = truth_extractions.get(key)
+        hypothesis = prediction_extractions.get(key)
+        if reference is None:
+            assert hypothesis is not None
+            reference = hypothesis.model_copy(update={"fields": [], "validations": []})
+        values = _extraction_metrics(reference, hypothesis)
+        category = document_categories[reference.document_id]
+        for name, value in values.items():
+            performance_values[name].append(value)
+            category_performance[category][name].append(value)
 
     category_breakdown = [
         CategoryBreakdown(

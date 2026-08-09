@@ -294,8 +294,11 @@ def _raster_manifest_and_truth(
     corpus: SyntheticCorpus,
     page_checksums: dict[str, Checksum],
     relative_paths: dict[str, str],
+    *,
+    dataset_id: str,
+    revision: str,
 ) -> tuple[Manifest, GroundTruth]:
-    revision = DatasetRevision(dataset_id="bac-synthetic-images", revision="0.3.0")
+    dataset_revision = DatasetRevision(dataset_id=dataset_id, revision=revision)
     documents: list[ManifestDocument] = []
     truth_documents: list[GroundTruthDocument] = []
     truth_by_document = {
@@ -334,11 +337,11 @@ def _raster_manifest_and_truth(
             document.model_copy(update={"checksum": document_checksum, "pages": pages})
         )
         truth_documents.append(
-            GroundTruthDocument(document_id=document.document_id, pages=truth_pages)
+            truth_by_document[document.document_id].model_copy(update={"pages": truth_pages})
         )
     manifest = corpus.manifest.model_copy(
         update={
-            "dataset_revision": revision,
+            "dataset_revision": dataset_revision,
             "documents": documents,
             "notes": [
                 *corpus.manifest.notes,
@@ -348,7 +351,7 @@ def _raster_manifest_and_truth(
         }
     )
     ground_truth = corpus.ground_truth.model_copy(
-        update={"dataset_revision": revision, "documents": truth_documents}
+        update={"dataset_revision": dataset_revision, "documents": truth_documents}
     )
     return manifest, ground_truth
 
@@ -361,11 +364,48 @@ def write_bac_images(
 ) -> dict[str, Path]:
     """Render original BAC-like records to PNG and return a public bundle."""
 
+    return _write_images(
+        generate_bac_corpus(seed=seed, repeats=repeats),
+        output_dir,
+        font_path,
+        seed,
+        dataset_id="bac-synthetic-images",
+        revision="0.3.0",
+    )
+
+
+def write_invoice_images(
+    output_dir: str | Path,
+    font_path: str | Path,
+    seed: int = 17,
+) -> dict[str, Path]:
+    """Render original Algerian invoice analogues to a public PNG bundle."""
+
+    from .invoice_synthetic import generate_invoice_corpus
+
+    return _write_images(
+        generate_invoice_corpus(seed=seed),
+        output_dir,
+        font_path,
+        seed,
+        dataset_id="invoice-dz-synthetic-images",
+        revision="0.1.0",
+    )
+
+
+def _write_images(
+    corpus: SyntheticCorpus,
+    output_dir: str | Path,
+    font_path: str | Path,
+    seed: int,
+    *,
+    dataset_id: str,
+    revision: str,
+) -> dict[str, Path]:
     font = Path(font_path)
     if not font.is_file():
         raise FileNotFoundError(f"font file does not exist: {font}")
     modules = _load_optional_dependencies()
-    corpus = generate_bac_corpus(seed=seed, repeats=repeats)
     directory = Path(output_dir)
     image_directory = directory / "images"
     image_directory.mkdir(parents=True, exist_ok=True)
@@ -410,7 +450,13 @@ def write_bac_images(
                     height=HEIGHT,
                 )
             )
-    manifest, ground_truth = _raster_manifest_and_truth(corpus, page_checksums, relative_paths)
+    manifest, ground_truth = _raster_manifest_and_truth(
+        corpus,
+        page_checksums,
+        relative_paths,
+        dataset_id=dataset_id,
+        revision=revision,
+    )
     asset_index = AssetIndex(dataset_revision=manifest.dataset_revision, assets=assets)
     directory.mkdir(parents=True, exist_ok=True)
     return {
@@ -422,4 +468,4 @@ def write_bac_images(
     }
 
 
-__all__ = ["write_bac_images"]
+__all__ = ["write_bac_images", "write_invoice_images"]
