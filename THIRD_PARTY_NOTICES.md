@@ -6,8 +6,11 @@ The Phase A runtime keeps dependencies small:
 | --- | --- | --- |
 | Pydantic 2.x | Typed contract models and validation | MIT |
 | Typer 0.x | CLI argument handling | MIT |
+| jsonschema 4.x | Draft 2020-12 public-contract validation | MIT |
+| referencing 0.x | In-memory JSON Schema reference registry | MIT |
 | pytest 8.x (development) | Tests | MIT |
 | Ruff 0.x (development) | Lint and formatting | MIT |
+| Pyright 1.x (development) | Static type checking | MIT |
 | Pillow 10.x/11.x (optional `raster`) | Deterministic PNG rendering | MIT-CMU |
 | arabic-reshaper 3.x (optional `raster`) | Arabic presentation shaping for fixtures | MIT |
 | python-bidi 0.6.x (optional `raster`) | Unicode bidirectional display ordering for fixtures | LGPL |

@@ -10,12 +10,14 @@ readme = "README.md"
 requires-python = ">=3.12"
 authors = [{ name = "MERATI Ali Ouala Eddine" }]
 dependencies = [
+  "jsonschema>=4.25,<5",
   "pydantic>=2.7,<3",
   "typer>=0.12,<1",
 ]
 
 [project.optional-dependencies]
 dev = [
+  "pyright>=1.1.408,<2",
   "pytest>=8,<9",
   "ruff>=0.6,<1",
 ]
@@ -31,6 +33,9 @@ dz-bench = "dz_bench.cli:app"
 [tool.hatch.build.targets.wheel]
 packages = ["src/dz_bench"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"schemas" = "dz_bench/schemas"
+
 [tool.pytest.ini_options]
 addopts = "-q"
 pythonpath = ["src"]
@@ -42,3 +47,8 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+
+[tool.pyright]
+include = ["src"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"

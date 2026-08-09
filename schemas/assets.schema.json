@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "assets.schema.json",
+  "title": "DZ-Bench evaluation asset index",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "dataset_revision": { "$ref": "common.schema.json#/$defs/datasetRevision" },
+    "assets": {
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/assetRecord" }
+    }
+  },
+  "required": ["schema_version", "dataset_revision", "assets"]
+}

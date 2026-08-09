@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import PurePosixPath
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 SCHEMA_VERSION = "1.0.0"
 
@@ -290,6 +291,37 @@ class Manifest(ContractModel):
         reference_ids = [source.reference_id for source in self.reference_sources]
         if len(reference_ids) != len(set(reference_ids)):
             raise ValueError("duplicate reference source ID")
+        return self
+
+
+class AssetRecord(ContractModel):
+    document_id: Identifier
+    page_id: Identifier
+    media_type: Literal["image/png", "image/jpeg", "image/tiff"]
+    relative_path: str = Field(min_length=1, max_length=500)
+    checksum: Checksum
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+
+    @field_validator("relative_path")
+    @classmethod
+    def relative_posix_path_only(cls, value: str) -> str:
+        path = PurePosixPath(value)
+        if "\\" in value or path.is_absolute() or ".." in path.parts:
+            raise ValueError("asset path must be a safe relative POSIX path")
+        return value
+
+
+class AssetIndex(ContractModel):
+    schema_version: str = Field(default=SCHEMA_VERSION, pattern=r"^\d+\.\d+\.\d+$")
+    dataset_revision: DatasetRevision
+    assets: list[AssetRecord] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def unique_page_assets(self) -> AssetIndex:
+        keys = [(asset.document_id, asset.page_id) for asset in self.assets]
+        if len(keys) != len(set(keys)):
+            raise ValueError("duplicate page asset")
         return self
 
 

@@ -11,6 +11,8 @@ from typing import Any
 
 from .io import write_json
 from .models import (
+    AssetIndex,
+    AssetRecord,
     Checksum,
     DatasetRevision,
     GroundTruth,
@@ -341,7 +343,7 @@ def _raster_manifest_and_truth(
             "notes": [
                 *corpus.manifest.notes,
                 "PNG bytes are the page checksums for this raster revision.",
-                "Image paths in records.json are relative to the bundle root.",
+                "Asset paths in assets.json are relative to the bundle root.",
             ],
         }
     )
@@ -370,6 +372,7 @@ def write_bac_images(
     page_checksums: dict[str, Checksum] = {}
     relative_paths: dict[str, str] = {}
     records: list[dict[str, object]] = []
+    assets: list[AssetRecord] = []
     records_by_page = {record["page_id"]: record for record in corpus.records}
     for document in corpus.ground_truth.documents:
         for page in document.pages:
@@ -396,12 +399,25 @@ def write_bac_images(
                 }
             )
             records.append(updated_record)
+            assets.append(
+                AssetRecord(
+                    document_id=document.document_id,
+                    page_id=page.page_id,
+                    media_type="image/png",
+                    relative_path=relative_path,
+                    checksum=checksum,
+                    width=WIDTH,
+                    height=HEIGHT,
+                )
+            )
     manifest, ground_truth = _raster_manifest_and_truth(corpus, page_checksums, relative_paths)
+    asset_index = AssetIndex(dataset_revision=manifest.dataset_revision, assets=assets)
     directory.mkdir(parents=True, exist_ok=True)
     return {
         "manifest": write_json(manifest, directory / "manifest.json"),
         "ground_truth": write_json(ground_truth, directory / "ground-truth.json"),
         "records": write_json(records, directory / "records.json"),
+        "assets": write_json(asset_index, directory / "assets.json"),
         "images": image_directory,
     }
 

@@ -1,9 +1,10 @@
 from pathlib import Path
 
 import pytest
+from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 
-from dz_bench.io import load_manifest, load_schema
+from dz_bench.io import load_manifest, load_schema, validate_instance
 from dz_bench.models import (
     Predictions,
     PredictionSample,
@@ -68,10 +69,38 @@ def test_missing_and_crashed_pages_are_counted() -> None:
 
 
 def test_all_public_schema_files_load() -> None:
-    for name in ("manifest", "ground-truth", "prediction", "report"):
+    for name in ("manifest", "ground-truth", "prediction", "report", "assets"):
         schema = load_schema(name)
         assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
         assert schema["$id"] == f"{name}.schema.json"
+
+
+def test_generated_artifacts_match_public_json_schemas() -> None:
+    corpus = generate_corpus(seed=6, document_count=1)
+    predictions = _predictions(
+        corpus,
+        [
+            PredictionSample(
+                document_id=corpus.ground_truth.documents[0].document_id,
+                page_id=corpus.ground_truth.documents[0].pages[0].page_id,
+                status="success",
+                page=corpus.ground_truth.documents[0].pages[0],
+            )
+        ],
+    )
+    report = score(corpus.manifest, corpus.ground_truth, predictions)
+    for kind, artifact in (
+        ("manifest", corpus.manifest),
+        ("ground-truth", corpus.ground_truth),
+        ("prediction", predictions),
+        ("report", report),
+    ):
+        validate_instance(artifact.model_dump(mode="json"), kind)
+
+    invalid = corpus.manifest.model_dump(mode="json")
+    invalid.pop("dataset_revision")
+    with pytest.raises(JsonSchemaValidationError):
+        validate_instance(invalid, "manifest")
 
 
 def test_reference_only_manifest_has_no_documents() -> None:

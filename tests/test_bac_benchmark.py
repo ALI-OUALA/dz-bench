@@ -7,6 +7,7 @@ import pytest
 from typer.testing import CliRunner
 
 from dz_bench.cli import app
+from dz_bench.io import load_asset_index, validate_instance
 from dz_bench.metrics import equation_text_page_score, layout_scores, table_structure_page_score
 from dz_bench.models import Predictions, PredictionSample, RunMetadata, SystemMetadata
 from dz_bench.raster import write_bac_images
@@ -166,6 +167,8 @@ def test_bac_images_write_real_png_checksums_and_preserve_geometry(tmp_path: Pat
     manifest = json.loads(outputs["manifest"].read_text(encoding="utf-8"))
     ground_truth = json.loads(outputs["ground_truth"].read_text(encoding="utf-8"))
     records = json.loads(outputs["records"].read_text(encoding="utf-8"))
+    assets = load_asset_index(outputs["assets"])
+    validate_instance(assets.model_dump(mode="json"), "assets")
     record_by_page = {record["page_id"]: record for record in records}
     truth_by_page = {
         page["page_id"]: page
@@ -176,6 +179,9 @@ def test_bac_images_write_real_png_checksums_and_preserve_geometry(tmp_path: Pat
     assert manifest["dataset_revision"]["dataset_id"] == "bac-synthetic-images"
     assert manifest["dataset_revision"]["revision"] == "0.3.0"
     assert len(records) == 8
+    assert len(assets.assets) == 8
+    assert all(asset.media_type == "image/png" for asset in assets.assets)
+    assert all("blocks" not in asset.model_dump() for asset in assets.assets)
     assert len({record["scan_quality"] for record in records}) == 4
     for document in manifest["documents"]:
         page = document["pages"][0]
@@ -245,4 +251,5 @@ def test_bac_images_cli_requires_font_and_writes_bundle(tmp_path: Path) -> None:
     assert (tmp_path / "manifest.json").is_file()
     assert (tmp_path / "ground-truth.json").is_file()
     assert (tmp_path / "records.json").is_file()
+    assert (tmp_path / "assets.json").is_file()
     assert len(list((tmp_path / "images").glob("*.png"))) == 8

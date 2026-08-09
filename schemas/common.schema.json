@@ -419,6 +419,33 @@
         "notes"
       ]
     },
+    "assetRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "document_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "page_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "media_type": { "enum": ["image/png", "image/jpeg", "image/tiff"] },
+        "relative_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"
+        },
+        "checksum": { "$ref": "common.schema.json#/$defs/checksum" },
+        "width": { "type": "integer", "exclusiveMinimum": 0 },
+        "height": { "type": "integer", "exclusiveMinimum": 0 }
+      },
+      "required": [
+        "document_id",
+        "page_id",
+        "media_type",
+        "relative_path",
+        "checksum",
+        "width",
+        "height"
+      ]
+    },
     "groundTruthDocument": {
       "type": "object",
       "additionalProperties": false,

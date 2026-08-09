@@ -7,11 +7,13 @@ import json
 import random
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 from .io import write_json
 from .models import (
     SCHEMA_VERSION,
     Block,
+    BlockType,
     BoundingBox,
     Checksum,
     Confidence,
@@ -19,14 +21,17 @@ from .models import (
     DatasetRevision,
     GroundTruth,
     GroundTruthDocument,
+    LanguageTag,
     Manifest,
     ManifestDocument,
     ManifestPage,
     ManifestSource,
     PageContent,
     Provenance,
+    ScriptTag,
     TableCell,
     TableStructure,
+    TextDirection,
     TextLine,
     TextSpan,
 )
@@ -461,7 +466,7 @@ def _checksum(value: object) -> Checksum:
     return Checksum(value=hashlib.sha256(_canonical_bytes(value)).hexdigest())
 
 
-def _text_metadata(category: str) -> tuple[str, str, str]:
+def _text_metadata(category: str) -> tuple[LanguageTag, ScriptTag, TextDirection]:
     if category == "arabic":
         return "ar", "arabic", "rtl"
     if category == "french":
@@ -775,6 +780,7 @@ def _bac_page_content(
         block_type = raw_spec.get("block_type")
         if not isinstance(block_type, str):
             raise ValueError("BAC block type must be a string")
+        typed_block_type = cast(BlockType, block_type)
         bbox = _bac_bbox(raw_spec)
         text = _bac_text(raw_spec.get("text"), code)
         equation_text = _bac_text(raw_spec.get("equation_text"), code)
@@ -812,7 +818,7 @@ def _bac_page_content(
         blocks.append(
             Block(
                 block_id=block_id,
-                block_type=block_type,
+                block_type=typed_block_type,
                 bbox=bbox,
                 reading_order_index=index,
                 confidence=confidence,
@@ -868,7 +874,12 @@ def _bac_record(
         "page_id": page_id,
         "page_index": 0,
         "category": category,
-        "tags": ["bac-style", "original-content", "source-record-only", *scenario["tags"]],
+        "tags": [
+            "bac-style",
+            "original-content",
+            "source-record-only",
+            *cast(tuple[str, ...], scenario["tags"]),
+        ],
         "scan_quality": scenario["scan_quality"],
         "asset_format": "record-only",
         "seed": seed,
@@ -905,7 +916,7 @@ def generate_bac_corpus(seed: int = 17, repeats: int = 1) -> SyntheticCorpus:
         page = _bac_page_content(
             document_id, page_id, category, scenario, seed, code, page_checksum
         )
-        tags = list(dict.fromkeys(record["tags"]))
+        tags = list(dict.fromkeys(cast(list[str], record["tags"])))
         manifest_page = ManifestPage(
             page_id=page_id,
             page_index=0,

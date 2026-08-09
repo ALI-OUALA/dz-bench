@@ -4,7 +4,7 @@ DZ-Bench is an independent, model-neutral benchmark for Arabic–French document
 
 Phase A plus the synthetic BAC slice provides:
 
-- draft 2020-12 schemas for manifests, ground truth, predictions, and reports;
+- packaged draft 2020-12 schemas for manifests, assets, ground truth, predictions, and reports;
 - Pydantic v2 validation with checksums, page-pixel coordinates, blocks, lines, spans, provenance, confidence, warnings, and alternatives;
 - conservative NFC normalization, CER, WER, normalized edit similarity, digit exact accuracy, reading-order sequence score, block/layout matching, equation text similarity, and table structure similarity;
 - failure-aware scoring that counts missing, crashed, timed-out, invalid, and ground-truth-missing pages;
@@ -20,6 +20,7 @@ uv sync --extra dev
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
+uv run pyright
 ```
 
 Install the optional deterministic PNG renderer:
@@ -60,7 +61,7 @@ dz-bench bac-images `
   --seed 17 --repeats 1
 ```
 
-`bac-images` writes `images/*.png`, relative `image_path` values in `records.json`, `source_kind: image`, and SHA-256 page checksums over the actual PNG bytes. Clean, compressed, skewed, and photographed variants keep the canonical page geometry and ground-truth boxes. No font is bundled.
+`bac-images` writes `images/*.png`, a ground-truth-free `assets.json` index, generator provenance in `records.json`, `source_kind: image`, and SHA-256 checksums over actual PNG bytes. OCR engines receive `manifest.json` plus `assets.json`; they never need authored record text. Clean, compressed, skewed, and photographed variants keep canonical page geometry and ground-truth boxes. No font is bundled.
 
 Run complete synthetic generation -> public prediction -> scorer -> JSON/Markdown
 report path:
@@ -90,6 +91,6 @@ The scorer writes both `.tmp/report.json` and `.tmp/report.md`. Prediction sampl
 
 ## Public schemas
 
-The four public files live under `schemas/` and share definitions through `common.schema.json`. Coordinates are page pixels with origin at the top-left, x increasing rightward, and y increasing downward. Each page and document carries a SHA-256 checksum. Raw text is preserved separately from normalized and search forms; no blind Arabic string reversal is performed.
+The five public artifact schemas live under `schemas/`, ship inside the wheel, and share definitions through `common.schema.json`. Coordinates are page pixels with origin at the top-left, x increasing rightward, and y increasing downward. Each page and document carries a SHA-256 checksum. Raw text is preserved separately from normalized and search forms; no blind Arabic string reversal is performed.
 
 `datasets/bac/manifests/bac-reference-only-v0.1.json` and [`DATASET_POLICY.md`](DATASET_POLICY.md) define the current legal boundary: no protected BAC PDFs and no fabricated real-BAC ground truth. The synthetic BAC-like records are original benchmark-authored content and are reported separately from real BAC data.

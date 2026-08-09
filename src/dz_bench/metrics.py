@@ -203,10 +203,13 @@ def table_structure_page_score(
         return None, 0
     hypothesis_tables = [block for block in hypothesis if block.block_type == "table"]
     matches = greedy_block_matches(reference_tables, hypothesis_tables)
-    total = sum(
-        table_structure_similarity(match.reference.table, match.hypothesis.table)
-        if match.hypothesis is not None and match.hypothesis.table is not None
-        else 0.0
-        for match in matches
-    )
+    total = 0.0
+    for match in matches:
+        reference_table = match.reference.table
+        if (
+            reference_table is not None
+            and match.hypothesis is not None
+            and match.hypothesis.table is not None
+        ):
+            total += table_structure_similarity(reference_table, match.hypothesis.table)
     return total / len(reference_tables), len(reference_tables)

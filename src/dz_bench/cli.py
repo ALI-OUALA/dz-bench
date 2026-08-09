@@ -10,6 +10,7 @@ import typer
 
 from .adapters.fake import FakeSystemAdapter
 from .io import (
+    load_asset_index,
     load_ground_truth,
     load_manifest,
     load_predictions,
@@ -120,13 +121,16 @@ def score_command(
 @app.command("validate")
 def validate_command(
     path: Path = typer.Argument(..., exists=True, readable=True),
-    kind: str = typer.Option(..., "--kind", help="manifest, ground-truth, prediction, or report."),
+    kind: str = typer.Option(
+        ..., "--kind", help="manifest, ground-truth, prediction, report, or assets."
+    ),
 ) -> None:
     loaders: dict[str, Callable[[Path], object]] = {
         "manifest": load_manifest,
         "ground-truth": load_ground_truth,
         "prediction": load_predictions,
         "report": load_report,
+        "assets": load_asset_index,
     }
     loader = loaders.get(kind)
     if loader is None:
@@ -137,7 +141,9 @@ def validate_command(
 
 @app.command("schema")
 def schema_command(
-    name: str = typer.Argument(..., help="manifest, ground-truth, prediction, report, or common."),
+    name: str = typer.Argument(
+        ..., help="manifest, ground-truth, prediction, report, assets, or common."
+    ),
 ) -> None:
     typer.echo(json.dumps(load_schema(name), ensure_ascii=False, indent=2))
 

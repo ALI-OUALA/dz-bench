@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from statistics import fmean
+from typing import Literal
 
 from .io import load_ground_truth, load_manifest, load_predictions, write_json
 from .metrics import (
@@ -24,7 +25,9 @@ from .models import (
     FailureRecord,
     GroundTruth,
     Manifest,
+    ManifestPage,
     MetricSummary,
+    MetricUnit,
     PageContent,
     Predictions,
     Report,
@@ -45,7 +48,7 @@ QUALITY_METRIC_NAMES = (
 )
 PERFORMANCE_METRIC_NAMES = ("runtime_ms", "peak_memory_mb")
 METRIC_NAMES = QUALITY_METRIC_NAMES
-_METRIC_SPECS = {
+_METRIC_SPECS: dict[str, tuple[MetricUnit, bool]] = {
     "cer": ("page", False),
     "wer": ("page", False),
     "normalized_edit_similarity": ("page", True),
@@ -275,7 +278,7 @@ def _metrics(
             values_by_name[name].append(value)
     for name, values in (extras or {}).items():
         values_by_name[name].extend(values)
-    names = list(QUALITY_METRIC_NAMES)
+    names: list[str] = list(QUALITY_METRIC_NAMES)
     names.extend(name for name in PERFORMANCE_METRIC_NAMES if values_by_name.get(name))
     return {name: _metric_summary(name, values_by_name.get(name, [])) for name in names}
 
@@ -285,7 +288,7 @@ def _performance_value(name: str, value: float) -> _MetricValue:
     return _MetricValue(value, value, 1, 1, unit, higher_is_better)
 
 
-def _page_map(manifest: Manifest) -> dict[tuple[str, str], tuple[str, object]]:
+def _page_map(manifest: Manifest) -> dict[tuple[str, str], tuple[str, ManifestPage]]:
     return {
         (document.document_id, page.page_id): (document.category, page)
         for document in manifest.documents
@@ -380,7 +383,8 @@ def score(manifest: Manifest, ground_truth: GroundTruth, predictions: Prediction
                 value = _performance_value(metric_name, measured_value)
                 performance_values[metric_name].append(value)
                 category_performance[category][metric_name].append(value)
-        if sample.status in {"crashed", "timeout"}:
+        if sample.status == "crashed" or sample.status == "timeout":
+            failure_status: Literal["crashed", "timeout"] = sample.status
             setattr(counts, sample.status, getattr(counts, sample.status) + 1)
             setattr(
                 category_counts[category],
@@ -391,7 +395,7 @@ def score(manifest: Manifest, ground_truth: GroundTruth, predictions: Prediction
                 FailureRecord(
                     document_id=document_id,
                     page_id=page_id,
-                    status=sample.status,
+                    status=failure_status,
                     message=sample.error.message if sample.error else sample.status,
                 )
             )
