@@ -35,6 +35,39 @@ def test_confidence_metrics_have_hand_computed_behavior() -> None:
     assert error_detection_auroc([False, True], [0.1, 0.9]) == 1.0
 
 
+def test_structured_field_scoring_ignores_missing_financial_fields() -> None:
+    from dz_bench.scoring import _extraction_metrics
+
+    reference_without_financial = DocumentExtraction(
+        document_id="invoice-1",
+        schema_name="invoice-dz",
+        schema_version="1.0.0",
+        fields=[_field("invoice_number", "FA-2026-0042"), _field("currency", "DZD")],
+    )
+    hypothesis = reference_without_financial.model_copy()
+
+    # Zero financial fields means we don't report the metric rather than reporting 0.0
+    metrics = _extraction_metrics(reference_without_financial, hypothesis)
+    assert "financial_value_accuracy" not in metrics
+    assert metrics["structured_field_exact_accuracy"].sample_count == 2
+
+    reference_with_financial = DocumentExtraction(
+        document_id="invoice-1",
+        schema_name="invoice-dz",
+        schema_version="1.0.0",
+        fields=[
+            _field("invoice_number", "FA-2026-0042"),
+            _field("total_ht", "100.00"),
+            _field("total_ttc", "119.00"),
+        ],
+    )
+    metrics_with_financial = _extraction_metrics(
+        reference_with_financial, reference_with_financial.model_copy()
+    )
+    assert "financial_value_accuracy" in metrics_with_financial
+    assert metrics_with_financial["financial_value_accuracy"].sample_count == 2
+
+
 def test_structured_field_scoring_penalizes_wrong_and_hallucinated_values() -> None:
     reference = DocumentExtraction(
         document_id="invoice-1",
