@@ -152,6 +152,7 @@ class StructuredFieldScores:
     hallucination_rate: float
     reference_count: int
     hypothesis_count: int
+    financial_count: int
 
 
 _FINANCIAL_FIELD_PARTS = ("ht", "tva", "ttc", "quantity", "unit_price", "line_total")
@@ -202,6 +203,7 @@ def structured_field_scores(
         hallucination_rate=hallucinated / max(len(hypothesis.fields), 1),
         reference_count=len(reference.fields),
         hypothesis_count=len(hypothesis.fields),
+        financial_count=financial_count,
     )
 
 

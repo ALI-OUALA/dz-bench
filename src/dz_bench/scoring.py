@@ -366,11 +366,10 @@ def _extraction_metrics(
         "structured_field_recall": scores.recall,
         "structured_field_f1": scores.f1,
         "structured_field_exact_accuracy": scores.exact_accuracy,
-        "financial_value_accuracy": scores.financial_accuracy,
         "structured_field_coordinate_iou": scores.coordinate_iou,
         "structured_hallucination_rate": scores.hallucination_rate,
     }
-    return {
+    result = {
         name: _MetricValue(
             value,
             value,
@@ -381,6 +380,16 @@ def _extraction_metrics(
         )
         for name, value in values.items()
     }
+    if scores.financial_count > 0:
+        result["financial_value_accuracy"] = _MetricValue(
+            scores.financial_accuracy,
+            scores.financial_accuracy,
+            1,
+            scores.financial_count,
+            _METRIC_SPECS["financial_value_accuracy"][0],
+            _METRIC_SPECS["financial_value_accuracy"][1],
+        )
+    return result
 
 
 def _metric_summary(name: str, values: list[_MetricValue]) -> MetricSummary:
