@@ -179,7 +179,13 @@ def structured_field_scores(
         predicted = hypothesis_by_name.get(name, [])
         hallucinated += max(0, len(predicted) - len(expected))
         for index, reference_field in enumerate(expected):
-            is_financial = any(part in name for part in _FINANCIAL_FIELD_PARTS)
+            is_financial = any(
+                part == name
+                or name.startswith(f"{part}_")
+                or name.endswith(f"_{part}")
+                or f"_{part}_" in name
+                for part in _FINANCIAL_FIELD_PARTS
+            )
             financial_count += int(is_financial)
             if index >= len(predicted):
                 continue

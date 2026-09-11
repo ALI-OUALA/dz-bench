@@ -68,6 +68,26 @@ def test_structured_field_scoring_ignores_missing_financial_fields() -> None:
     assert metrics_with_financial["financial_value_accuracy"].sample_count == 2
 
 
+def test_structured_field_scoring_ignores_substring_matches_for_financial_fields() -> None:
+    from dz_bench.scoring import _extraction_metrics
+
+    reference_with_false_positives = DocumentExtraction(
+        document_id="invoice-1",
+        schema_name="invoice-dz",
+        schema_version="1.0.0",
+        fields=[
+            _field("weight", "100.00"),
+            _field("flight_number", "AH1020"),
+            _field("bought", "true"),
+        ],
+    )
+    hypothesis = reference_with_false_positives.model_copy()
+
+    metrics = _extraction_metrics(reference_with_false_positives, hypothesis)
+    assert "financial_value_accuracy" not in metrics
+    assert metrics["structured_field_exact_accuracy"].sample_count == 3
+
+
 def test_structured_field_scoring_penalizes_wrong_and_hallucinated_values() -> None:
     reference = DocumentExtraction(
         document_id="invoice-1",
