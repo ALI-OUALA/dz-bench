@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -156,6 +157,10 @@ class StructuredFieldScores:
 
 
 _FINANCIAL_FIELD_PARTS = ("ht", "tva", "ttc", "quantity", "unit_price", "line_total")
+_FINANCIAL_FIELD_PATTERN = re.compile(
+    r"(^|[_.\-\[\]])(" + "|".join(_FINANCIAL_FIELD_PARTS) + r")([_.\-\[\]]|$)",
+    flags=re.IGNORECASE,
+)
 
 
 def structured_field_scores(
@@ -179,7 +184,7 @@ def structured_field_scores(
         predicted = hypothesis_by_name.get(name, [])
         hallucinated += max(0, len(predicted) - len(expected))
         for index, reference_field in enumerate(expected):
-            is_financial = any(part in name for part in _FINANCIAL_FIELD_PARTS)
+            is_financial = bool(_FINANCIAL_FIELD_PATTERN.search(name))
             financial_count += int(is_financial)
             if index >= len(predicted):
                 continue
