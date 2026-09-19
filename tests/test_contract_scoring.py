@@ -200,3 +200,63 @@ def test_reading_order_does_not_compare_system_local_ids() -> None:
     )
     report = score(corpus.manifest, corpus.ground_truth, _predictions(corpus, [prediction]))
     assert report.metrics["reading_order_sequence_score"].micro == 1.0
+
+
+def test_score_extractions_determinism() -> None:
+    corpus = generate_corpus(seed=10, document_count=1)
+    truth_document = corpus.ground_truth.documents[0]
+
+    # Create multiple extractions to verify `key` sorting works without dependency on dict order
+    ex1 = DocumentExtraction(
+        document_id=truth_document.document_id,
+        schema_name="invoice-dz",
+        schema_version="1.0.0",
+        fields=[
+            StructuredField(
+                field_id="f1",
+                field_name="total_ttc",
+                value="1190.00",
+                normalized_value="1190.00",
+                value_type="decimal",
+                confidence={"score": 1.0},
+                provenance=Provenance(kind="human_annotation", source="fixture"),
+            )
+        ],
+    )
+    ex2 = DocumentExtraction(
+        document_id=truth_document.document_id,
+        schema_name="invoice-fr",
+        schema_version="1.0.0",
+        fields=[
+            StructuredField(
+                field_id="f2",
+                field_name="total_ht",
+                value="1000.00",
+                normalized_value="1000.00",
+                value_type="decimal",
+                confidence={"score": 1.0},
+                provenance=Provenance(kind="human_annotation", source="fixture"),
+            )
+        ],
+    )
+
+    truth_document.extractions.append(ex1)
+    truth_document.extractions.append(ex2)
+
+    predictions1 = _predictions(corpus, [])
+    # order 1
+    predictions1.document_extractions.append(ex1)
+    predictions1.document_extractions.append(ex2)
+
+    predictions2 = _predictions(corpus, [])
+    # order 2
+    predictions2.document_extractions.append(ex2)
+    predictions2.document_extractions.append(ex1)
+
+    report1 = score(corpus.manifest, corpus.ground_truth, predictions1)
+    report2 = score(corpus.manifest, corpus.ground_truth, predictions2)
+
+    assert (
+        report1.metrics["financial_value_accuracy"].micro
+        == report2.metrics["financial_value_accuracy"].micro
+    )
