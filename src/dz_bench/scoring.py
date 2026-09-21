@@ -594,7 +594,7 @@ def score(manifest: Manifest, ground_truth: GroundTruth, predictions: Prediction
         (extraction.document_id, extraction.schema_name, extraction.schema_version): extraction
         for extraction in predictions.document_extractions
     }
-    for key in truth_extractions.keys() | prediction_extractions.keys():
+    for key in sorted(truth_extractions.keys() | prediction_extractions.keys()):
         reference = truth_extractions.get(key)
         hypothesis = prediction_extractions.get(key)
         if reference is None:

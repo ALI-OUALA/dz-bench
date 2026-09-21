@@ -93,3 +93,62 @@ def test_structured_field_scoring_penalizes_wrong_and_hallucinated_values() -> N
     assert scores.financial_accuracy == 0.0
     assert scores.hallucination_rate == pytest.approx(1 / 3)
     assert scores.coordinate_iou == 1.0
+
+
+def test_structured_field_scoring_is_deterministic() -> None:
+    from dz_bench.models import (
+        BoundingBox,
+        Confidence,
+        DocumentExtraction,
+        Provenance,
+        StructuredField,
+    )
+
+    def _field(name: str, value: str, bbox_x: int, bbox_y: int) -> StructuredField:
+        return StructuredField(
+            field_id=f"f-{name}",
+            field_name=name,
+            value=value,
+            normalized_value=value,
+            value_type="string",
+            confidence=Confidence(score=1.0),
+            page_id="p-1",
+            bbox=BoundingBox(x=bbox_x, y=bbox_y, width=10, height=10),
+            provenance=Provenance(kind="human_annotation", source="test"),
+        )
+
+    fields = [
+        _field("a", "1", 0, 0),
+        _field("b", "2", 10, 10),
+        _field("c", "3", 20, 20),
+        _field("d", "4", 30, 30),
+        _field("e", "5", 40, 40),
+        _field("f", "6", 50, 50),
+    ]
+
+    ref1 = DocumentExtraction(
+        document_id="d1", schema_name="s", schema_version="1.0.0", fields=fields
+    )
+    ref2 = DocumentExtraction(
+        document_id="d1", schema_name="s", schema_version="1.0.0", fields=fields[::-1]
+    )
+
+    hyp_fields1 = [
+        _field("a", "1", 0, 1),
+        _field("b", "2", 10, 11),
+        _field("c", "3", 20, 21),
+        _field("d", "4", 30, 31),
+        _field("e", "5", 40, 41),
+        _field("f", "6", 50, 51),
+    ]
+
+    hyp1 = DocumentExtraction(
+        document_id="d1", schema_name="s", schema_version="1.0.0", fields=hyp_fields1
+    )
+    hyp2 = DocumentExtraction(
+        document_id="d1", schema_name="s", schema_version="1.0.0", fields=hyp_fields1[::-1]
+    )
+
+    score1 = structured_field_scores(ref1, hyp1)
+    score2 = structured_field_scores(ref2, hyp2)
+    assert score1.coordinate_iou == score2.coordinate_iou
