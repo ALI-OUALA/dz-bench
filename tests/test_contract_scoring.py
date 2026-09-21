@@ -200,3 +200,78 @@ def test_reading_order_does_not_compare_system_local_ids() -> None:
     )
     report = score(corpus.manifest, corpus.ground_truth, _predictions(corpus, [prediction]))
     assert report.metrics["reading_order_sequence_score"].micro == 1.0
+
+
+def test_scoring_extractions_is_deterministic() -> None:
+    from dz_bench.models import (
+        BoundingBox,
+        Confidence,
+        DocumentExtraction,
+        PredictionSample,
+        Provenance,
+        StructuredField,
+    )
+    from dz_bench.scoring import score
+    from dz_bench.synthetic import generate_corpus
+
+    def _ext(doc_id):
+        return DocumentExtraction(
+            document_id=doc_id,
+            schema_name="s",
+            schema_version="1.0.0",
+            fields=[
+                StructuredField(
+                    field_id=f"f-{doc_id}",
+                    field_name="a",
+                    value="1",
+                    normalized_value="1",
+                    value_type="string",
+                    confidence=Confidence(score=1.0),
+                    page_id="p-1",
+                    bbox=BoundingBox(x=0, y=0, width=10, height=10),
+                    provenance=Provenance(kind="human_annotation", source="test"),
+                )
+            ],
+        )
+
+    corpus = generate_corpus(seed=4, document_count=3)
+    doc_ids = [d.document_id for d in corpus.ground_truth.documents]
+    exts = [_ext(doc_id) for doc_id in doc_ids]
+
+    for doc in corpus.ground_truth.documents:
+        doc.extractions = [_ext(doc.document_id)]
+
+    preds1 = _predictions(
+        corpus,
+        [
+            PredictionSample(
+                document_id=d.document_id,
+                page_id=d.pages[0].page_id,
+                status="success",
+                page=d.pages[0],
+            )
+            for d in corpus.ground_truth.documents
+        ],
+    )
+    preds1.document_extractions = exts
+
+    preds2 = _predictions(
+        corpus,
+        [
+            PredictionSample(
+                document_id=d.document_id,
+                page_id=d.pages[0].page_id,
+                status="success",
+                page=d.pages[0],
+            )
+            for d in corpus.ground_truth.documents
+        ],
+    )
+    preds2.document_extractions = exts[::-1]
+
+    report1 = score(corpus.manifest, corpus.ground_truth, preds1)
+    report2 = score(corpus.manifest, corpus.ground_truth, preds2)
+
+    assert (
+        report1.metrics["structured_field_f1"].macro == report2.metrics["structured_field_f1"].macro
+    )
