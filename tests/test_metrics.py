@@ -35,3 +35,39 @@ def test_bounding_box_iou_is_exact_for_identical_and_disjoint_boxes() -> None:
     box = BoundingBox(x=0, y=0, width=10, height=10)
     assert bounding_box_iou(box, box) == 1.0
     assert bounding_box_iou(box, BoundingBox(x=20, y=20, width=5, height=5)) == 0.0
+
+
+def test_greedy_block_matches_deterministic_tie_breaking() -> None:
+    from dz_bench.metrics import greedy_block_matches
+    from dz_bench.models import Block, BoundingBox, Confidence, Provenance
+
+    box = BoundingBox(x=0, y=0, width=10, height=10)
+    ref = [
+        Block(
+            block_id="ref_1",
+            block_type="paragraph",
+            reading_order_index=0,
+            confidence=Confidence(score=1.0),
+            provenance=Provenance(kind="human_annotation", source="ref"),
+            bbox=box,
+        )
+    ]
+
+    # Create several identical hypothesis blocks to trigger a max() tie.
+    # The tie should be broken deterministically by picking the lowest index.
+    hyp = [
+        Block(
+            block_id=f"hyp_{i}",
+            block_type="paragraph",
+            reading_order_index=0,
+            confidence=Confidence(score=0.9),
+            provenance=Provenance(kind="system_prediction", source="hyp"),
+            bbox=box,
+        )
+        for i in range(10)
+    ]
+
+    matches = greedy_block_matches(ref, hyp)
+    assert len(matches) == 1
+    assert matches[0].hypothesis is not None
+    assert matches[0].hypothesis.block_id == "hyp_0"
