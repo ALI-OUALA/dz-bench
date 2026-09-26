@@ -93,3 +93,43 @@ def test_structured_field_scoring_penalizes_wrong_and_hallucinated_values() -> N
     assert scores.financial_accuracy == 0.0
     assert scores.hallucination_rate == pytest.approx(1 / 3)
     assert scores.coordinate_iou == 1.0
+
+
+def test_structured_field_scoring_is_deterministic() -> None:
+    # Adding items that would cause different orders across Python runs if sets are unordered.
+    # We create a large number of fields to amplify floating-point precision differences
+    # if evaluated in a different order.
+    fields_ref = [_field(f"field_a_{i}", f"val_{i}") for i in range(50)] + [
+        _field(f"total_ht_{i}", f"{i}.00") for i in range(50)
+    ]
+
+    fields_hyp = (
+        [_field(f"field_a_{i}", f"val_{i}") for i in range(40)]
+        + [_field(f"field_a_{i}", f"wrong_{i}") for i in range(40, 50)]
+        + [_field(f"total_ht_{i}", f"{i}.00") for i in range(40)]
+        + [_field(f"total_ht_{i}", f"wrong_{i}") for i in range(40, 50)]
+        + [_field(f"extra_field_{i}", "extra") for i in range(10)]
+    )
+
+    reference1 = DocumentExtraction(
+        document_id="invoice-1",
+        schema_name="invoice-dz",
+        schema_version="1.0.0",
+        fields=fields_ref,
+    )
+    hypothesis1 = reference1.model_copy(update={"fields": fields_hyp})
+
+    reference2 = reference1.model_copy(update={"fields": list(reversed(fields_ref))})
+    hypothesis2 = hypothesis1.model_copy(update={"fields": list(reversed(fields_hyp))})
+
+    scores1 = structured_field_scores(reference1, hypothesis1)
+    scores2 = structured_field_scores(reference2, hypothesis2)
+
+    # We do strict equality (==), NOT pytest.approx, because exact deterministic ordering
+    # should produce identically evaluated floating point additions.
+    assert scores1.precision == scores2.precision
+    assert scores1.recall == scores2.recall
+    assert scores1.exact_accuracy == scores2.exact_accuracy
+    assert scores1.financial_accuracy == scores2.financial_accuracy
+    assert scores1.hallucination_rate == scores2.hallucination_rate
+    assert scores1.coordinate_iou == scores2.coordinate_iou
