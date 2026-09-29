@@ -200,3 +200,53 @@ def test_reading_order_does_not_compare_system_local_ids() -> None:
     )
     report = score(corpus.manifest, corpus.ground_truth, _predictions(corpus, [prediction]))
     assert report.metrics["reading_order_sequence_score"].micro == 1.0
+
+
+def test_extraction_scoring_is_deterministic() -> None:
+    corpus = generate_corpus(seed=11, document_count=1)
+    truth_document = corpus.ground_truth.documents[0]
+
+    # Add multiple extractions to test set iteration order stability
+    for i in range(10):
+        extraction = DocumentExtraction(
+            document_id=truth_document.document_id,
+            schema_name=f"test-schema-{i}",
+            schema_version="1.0.0",
+            fields=[
+                StructuredField(
+                    field_id=f"field-{i}",
+                    field_name=f"name_{i}",
+                    value=str(i),
+                    normalized_value=str(i),
+                    value_type="string",
+                    confidence={"score": 1.0, "calibrated": True},
+                    provenance=Provenance(kind="human_annotation", source="fixture"),
+                )
+            ],
+        )
+        truth_document.extractions.append(extraction)
+
+    predictions = _predictions(
+        corpus,
+        [
+            PredictionSample(
+                document_id=truth_document.document_id,
+                page_id=truth_document.pages[0].page_id,
+                status="success",
+                page=truth_document.pages[0],
+            )
+        ],
+    )
+    # Add predicted extractions (identical to ground truth)
+    predictions.document_extractions.extend(truth_document.extractions)
+
+    # First run
+    report1 = score(corpus.manifest, corpus.ground_truth, predictions)
+
+    # Run a few times and ensure scores are identical
+    for _ in range(5):
+        report2 = score(corpus.manifest, corpus.ground_truth, predictions)
+        assert (
+            report1.metrics["structured_field_f1"].micro
+            == report2.metrics["structured_field_f1"].micro
+        )
