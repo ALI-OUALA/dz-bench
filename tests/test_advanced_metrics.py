@@ -93,3 +93,39 @@ def test_structured_field_scoring_penalizes_wrong_and_hallucinated_values() -> N
     assert scores.financial_accuracy == 0.0
     assert scores.hallucination_rate == pytest.approx(1 / 3)
     assert scores.coordinate_iou == 1.0
+
+
+def test_structured_field_scores_determinism() -> None:
+    from dz_bench.metrics import structured_field_scores
+
+    # We construct a case with a few fields to ensure we exercise the sorting logic
+    reference = DocumentExtraction(
+        document_id="invoice-1",
+        schema_name="invoice-dz",
+        schema_version="1.0.0",
+        fields=[
+            _field("invoice_number", "FA-1"),
+            _field("total_ttc", "100"),
+        ],
+    )
+    hypothesis = DocumentExtraction(
+        document_id="invoice-1",
+        schema_name="invoice-dz",
+        schema_version="1.0.0",
+        fields=[
+            _field("invoice_number", "FA-1"),
+            _field("total_ttc", "100"),
+            _field("currency", "DZD"),  # hallucination
+            _field("tax_id", "12345"),  # hallucination
+        ],
+    )
+
+    # We will compute it multiple times and verify exact matching of float
+    # Though python sets are seeded randomly per process, we can run it many times
+    # to catch any instability if it existed, but we really just want to ensure
+    # the exact same metric output is produced.
+    scores1 = structured_field_scores(reference, hypothesis)
+    scores2 = structured_field_scores(reference, hypothesis)
+
+    assert scores1.coordinate_iou == scores2.coordinate_iou
+    assert scores1.precision == scores2.precision

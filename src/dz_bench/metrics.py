@@ -174,7 +174,7 @@ def structured_field_scores(
     financial_count = 0
     coordinate_scores: list[float] = []
     hallucinated = 0
-    for name in set(reference_by_name) | set(hypothesis_by_name):
+    for name in sorted(set(reference_by_name) | set(hypothesis_by_name)):
         expected = reference_by_name.get(name, [])
         predicted = hypothesis_by_name.get(name, [])
         hallucinated += max(0, len(predicted) - len(expected))
@@ -221,7 +221,7 @@ def greedy_block_matches(
 
     if not 0 <= minimum_iou <= 1:
         raise ValueError("minimum_iou must be between 0 and 1")
-    remaining = set(range(len(hypothesis)))
+    remaining = dict.fromkeys(range(len(hypothesis)))
     matches: list[BlockMatch] = []
     for reference_block in reference:
         if not remaining:
@@ -235,7 +235,7 @@ def greedy_block_matches(
         if best_iou < minimum_iou:
             matches.append(BlockMatch(reference_block, None, 0.0))
             continue
-        remaining.remove(best_index)
+        del remaining[best_index]
         matches.append(BlockMatch(reference_block, hypothesis[best_index], best_iou))
     return matches
 

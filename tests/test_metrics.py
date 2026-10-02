@@ -35,3 +35,45 @@ def test_bounding_box_iou_is_exact_for_identical_and_disjoint_boxes() -> None:
     box = BoundingBox(x=0, y=0, width=10, height=10)
     assert bounding_box_iou(box, box) == 1.0
     assert bounding_box_iou(box, BoundingBox(x=20, y=20, width=5, height=5)) == 0.0
+
+
+def test_greedy_block_matches_determinism() -> None:
+    from dz_bench.metrics import greedy_block_matches
+    from dz_bench.models import Block, BoundingBox, Confidence, Provenance
+
+    reference = [
+        Block(
+            block_id="ref-1",
+            block_type="paragraph",
+            bbox=BoundingBox(x=0, y=0, width=100, height=100),
+            reading_order_index=0,
+            confidence=Confidence(score=1.0),
+            provenance=Provenance(kind="system_prediction", source="test"),
+        )
+    ]
+    # Two identical overlapping hypotheses
+    hypothesis = [
+        Block(
+            block_id="hyp-1",
+            block_type="paragraph",
+            bbox=BoundingBox(x=0, y=0, width=100, height=100),
+            reading_order_index=0,
+            confidence=Confidence(score=1.0),
+            provenance=Provenance(kind="system_prediction", source="test"),
+        ),
+        Block(
+            block_id="hyp-2",
+            block_type="paragraph",
+            bbox=BoundingBox(x=0, y=0, width=100, height=100),
+            reading_order_index=1,
+            confidence=Confidence(score=1.0),
+            provenance=Provenance(kind="system_prediction", source="test"),
+        ),
+    ]
+
+    matches = greedy_block_matches(reference, hypothesis)
+    assert len(matches) == 1
+    assert matches[0].hypothesis is not None
+    # Given a tie in best_iou, max() over the dictionary keys should pick the first one (index 0)
+    # due to dict.fromkeys preserving insertion order from range()
+    assert matches[0].hypothesis.block_id == "hyp-1"
