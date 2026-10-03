@@ -39,6 +39,7 @@ def test_bounding_box_iou_is_exact_for_identical_and_disjoint_boxes() -> None:
 
 def test_structured_field_scores_are_deterministic() -> None:
     import random
+
     from dz_bench.metrics import structured_field_scores
     from dz_bench.models import BoundingBox, DocumentExtraction, StructuredField
 
