@@ -51,8 +51,8 @@ def test_structured_field_scores_are_deterministic() -> None:
             value=f"value_{i}",
             normalized_value=f"value_{i}",
             value_type="string",
-            confidence={"score": 1.0}, # type: ignore
-            provenance={"kind": "system_prediction", "source": "test"}, # type: ignore
+            confidence={"score": 1.0},  # type: ignore
+            provenance={"kind": "system_prediction", "source": "test"},  # type: ignore
             bbox=BoundingBox(x=i * 0.1, y=i * 0.1, width=10.0, height=10.0),
         )
         for i in range(20)
@@ -64,8 +64,8 @@ def test_structured_field_scores_are_deterministic() -> None:
             value=f"value_{i}" if i % 2 == 0 else f"other_{i}",
             normalized_value=f"value_{i}" if i % 2 == 0 else f"other_{i}",
             value_type="string",
-            confidence={"score": 1.0}, # type: ignore
-            provenance={"kind": "system_prediction", "source": "test"}, # type: ignore
+            confidence={"score": 1.0},  # type: ignore
+            provenance={"kind": "system_prediction", "source": "test"},  # type: ignore
             bbox=BoundingBox(x=i * 0.1, y=i * 0.1, width=9.0, height=11.0),
         )
         for i in range(25)
