@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -200,3 +201,47 @@ def test_reading_order_does_not_compare_system_local_ids() -> None:
     )
     report = score(corpus.manifest, corpus.ground_truth, _predictions(corpus, [prediction]))
     assert report.metrics["reading_order_sequence_score"].micro == 1.0
+
+
+def test_extraction_scoring_determinism() -> None:
+    corpus = generate_corpus(seed=9, document_count=1)
+    truth_document = corpus.ground_truth.documents[0]
+    extractions = []
+    for i in range(10):
+        extraction = DocumentExtraction(
+            document_id=truth_document.document_id,
+            schema_name=f"invoice-dz-{i}",
+            schema_version="1.0.0",
+            fields=[
+                StructuredField(
+                    field_id=f"total-ttc-{i}",
+                    field_name=f"total_ttc_{i}",
+                    value="1190.00",
+                    normalized_value="1190.00",
+                    value_type="decimal",
+                    confidence={"score": 1.0},
+                    provenance=Provenance(kind="system_prediction", source="fixture"),
+                )
+            ],
+        )
+        extractions.append(extraction)
+    truth_document.extractions.extend(extractions)
+    predictions = _predictions(
+        corpus,
+        [
+            PredictionSample(
+                document_id=truth_document.document_id,
+                page_id=truth_document.pages[0].page_id,
+                status="success",
+                page=truth_document.pages[0],
+            )
+        ],
+    )
+    predictions.document_extractions.extend(reversed(extractions))
+    os.environ["PYTHONHASHSEED"] = "random"
+    report1 = score(corpus.manifest, corpus.ground_truth, predictions)
+    report2 = score(corpus.manifest, corpus.ground_truth, predictions)
+    assert list(report1.metrics.keys()) == list(report2.metrics.keys())
+    assert [m.micro for m in report1.metrics.values()] == [
+        m.micro for m in report2.metrics.values()
+    ]
