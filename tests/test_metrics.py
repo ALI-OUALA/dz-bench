@@ -35,3 +35,90 @@ def test_bounding_box_iou_is_exact_for_identical_and_disjoint_boxes() -> None:
     box = BoundingBox(x=0, y=0, width=10, height=10)
     assert bounding_box_iou(box, box) == 1.0
     assert bounding_box_iou(box, BoundingBox(x=20, y=20, width=5, height=5)) == 0.0
+
+
+def test_deterministic_structured_field_scores() -> None:
+    from dz_bench.metrics import structured_field_scores
+    from dz_bench.models import (
+        BoundingBox,
+        Confidence,
+        DocumentExtraction,
+        Provenance,
+        StructuredField,
+    )
+
+    conf = Confidence(score=1.0)
+    prov = Provenance(kind="system_prediction", source="test")
+    ref = DocumentExtraction(
+        document_id="doc1",
+        schema_name="s",
+        schema_version="1.0.0",
+        fields=[
+            StructuredField(
+                field_id=str(i),
+                field_name=str(i),
+                value="1",
+                normalized_value="1",
+                value_type="string",
+                confidence=conf,
+                provenance=prov,
+                bbox=BoundingBox(x=0, y=0, width=10, height=10),
+            )
+            for i in range(100)
+        ],
+        validations=[],
+    )
+    hyp = DocumentExtraction(
+        document_id="doc1",
+        schema_name="s",
+        schema_version="1.0.0",
+        fields=[
+            StructuredField(
+                field_id=str(i),
+                field_name=str(i),
+                value="1",
+                normalized_value="1",
+                value_type="string",
+                confidence=conf,
+                provenance=prov,
+                bbox=BoundingBox(x=0, y=0, width=10, height=10),
+            )
+            for i in range(100)
+        ],
+        validations=[],
+    )
+    scores1 = structured_field_scores(ref, hyp)
+    scores2 = structured_field_scores(ref, hyp)
+    assert scores1.coordinate_iou == scores2.coordinate_iou
+
+
+def test_deterministic_greedy_block_matches() -> None:
+    from dz_bench.metrics import greedy_block_matches
+    from dz_bench.models import Block, BoundingBox, Confidence, Provenance
+
+    conf = Confidence(score=1.0)
+    prov = Provenance(kind="system_prediction", source="test")
+    ref = [
+        Block(
+            block_id="b1",
+            block_type="paragraph",
+            bbox=BoundingBox(x=0, y=0, width=10, height=10),
+            reading_order_index=0,
+            confidence=conf,
+            provenance=prov,
+        )
+    ]
+    hyp = [
+        Block(
+            block_id=str(i),
+            block_type="paragraph",
+            bbox=BoundingBox(x=10, y=10, width=10, height=10),
+            reading_order_index=i,
+            confidence=conf,
+            provenance=prov,
+        )
+        for i in range(100)
+    ]
+    matches1 = greedy_block_matches(ref, hyp, minimum_iou=0.0)
+    matches2 = greedy_block_matches(ref, hyp, minimum_iou=0.0)
+    assert matches1[0].hypothesis is matches2[0].hypothesis
