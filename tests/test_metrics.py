@@ -35,3 +35,49 @@ def test_bounding_box_iou_is_exact_for_identical_and_disjoint_boxes() -> None:
     box = BoundingBox(x=0, y=0, width=10, height=10)
     assert bounding_box_iou(box, box) == 1.0
     assert bounding_box_iou(box, BoundingBox(x=20, y=20, width=5, height=5)) == 0.0
+
+
+def test_greedy_block_matches_determinism() -> None:
+    import os
+
+    from dz_bench.metrics import greedy_block_matches
+    from dz_bench.models import Block, BoundingBox, Confidence, Provenance
+
+    ref = [
+        Block(
+            block_id="ref",
+            block_type="paragraph",
+            bbox=BoundingBox(x=0, y=0, width=10, height=10),
+            reading_order_index=0,
+            confidence=Confidence(score=1.0),
+            provenance=Provenance(kind="system_prediction", source="test"),
+            lines=[],
+        ),
+    ]
+
+    hyp = [
+        Block(
+            block_id=f"hyp{i}",
+            block_type="paragraph",
+            bbox=BoundingBox(x=0, y=0, width=10, height=10),
+            reading_order_index=i,
+            confidence=Confidence(score=1.0),
+            provenance=Provenance(kind="system_prediction", source="test"),
+            lines=[],
+        )
+        for i in range(10)
+    ]
+
+    # Change hash seed via environment variable
+    env_copy = os.environ.get("PYTHONHASHSEED")
+    os.environ["PYTHONHASHSEED"] = "random"
+    try:
+        matches = greedy_block_matches(ref, hyp)
+        # Because we pick the lowest index when IOU ties, it should consistently be hyp0.
+        assert matches[0].hypothesis is not None
+        assert matches[0].hypothesis.block_id == "hyp0"
+    finally:
+        if env_copy is not None:
+            os.environ["PYTHONHASHSEED"] = env_copy
+        else:
+            del os.environ["PYTHONHASHSEED"]
