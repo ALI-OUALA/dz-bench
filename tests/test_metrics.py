@@ -35,3 +35,45 @@ def test_bounding_box_iou_is_exact_for_identical_and_disjoint_boxes() -> None:
     box = BoundingBox(x=0, y=0, width=10, height=10)
     assert bounding_box_iou(box, box) == 1.0
     assert bounding_box_iou(box, BoundingBox(x=20, y=20, width=5, height=5)) == 0.0
+
+
+def test_greedy_block_matches_tie_breaking() -> None:
+    from dz_bench.metrics import greedy_block_matches
+    from dz_bench.models import Block, BoundingBox, Confidence, Provenance
+
+    reference_block = Block(
+        block_id="ref",
+        block_type="paragraph",
+        reading_order_index=0,
+        bbox=BoundingBox(x=0, y=0, width=100, height=100),
+        lines=[],
+        confidence=Confidence(score=1.0, calibrated=False),
+        provenance=Provenance(kind="human_annotation", source="test"),
+    )
+
+    hypothesis_blocks = [
+        Block(
+            block_id="hyp_0",
+            block_type="paragraph",
+            reading_order_index=0,
+            bbox=BoundingBox(x=0, y=0, width=100, height=100),
+            lines=[],
+            confidence=Confidence(score=1.0, calibrated=False),
+            provenance=Provenance(kind="human_annotation", source="test"),
+        ),
+        Block(
+            block_id="hyp_1",
+            block_type="paragraph",
+            reading_order_index=1,
+            bbox=BoundingBox(x=0, y=0, width=100, height=100),
+            lines=[],
+            confidence=Confidence(score=1.0, calibrated=False),
+            provenance=Provenance(kind="human_annotation", source="test"),
+        ),
+    ]
+
+    # Two exact matches for the reference block. The first block should be chosen
+    matches = greedy_block_matches([reference_block], hypothesis_blocks)
+    assert len(matches) == 1
+    assert matches[0].hypothesis is not None
+    assert matches[0].hypothesis.block_id == "hyp_0"
