@@ -229,7 +229,7 @@ def greedy_block_matches(
             continue
         best_index = max(
             remaining,
-            key=lambda index: bounding_box_iou(reference_block.bbox, hypothesis[index].bbox),
+            key=lambda i: (bounding_box_iou(reference_block.bbox, hypothesis[i].bbox), -i),
         )
         best_iou = bounding_box_iou(reference_block.bbox, hypothesis[best_index].bbox)
         if best_iou < minimum_iou:
