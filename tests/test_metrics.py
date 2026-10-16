@@ -36,6 +36,7 @@ def test_bounding_box_iou_is_exact_for_identical_and_disjoint_boxes() -> None:
     assert bounding_box_iou(box, box) == 1.0
     assert bounding_box_iou(box, BoundingBox(x=20, y=20, width=5, height=5)) == 0.0
 
+
 def test_greedy_block_matches_tie_breaker_is_deterministic() -> None:
     from dz_bench.metrics import greedy_block_matches
     from dz_bench.models import Block, BoundingBox, Confidence, Provenance
@@ -50,7 +51,7 @@ def test_greedy_block_matches_tie_breaker_is_deterministic() -> None:
             reading_order_index=0,
             confidence=Confidence(score=1.0),
             provenance=Provenance(kind="system_prediction", source="test"),
-            lines=[]
+            lines=[],
         )
 
     # One reference block
@@ -63,6 +64,7 @@ def test_greedy_block_matches_tie_breaker_is_deterministic() -> None:
     assert len(matches) == 1
     assert matches[0].hypothesis is not None
     assert matches[0].hypothesis.block_id == "hyp0"
+
 
 def test_structured_field_scores_determinism() -> None:
     from dz_bench.metrics import structured_field_scores
@@ -83,7 +85,7 @@ def test_structured_field_scores_determinism() -> None:
             value_type="string",
             bbox=BoundingBox(x=0, y=0, width=width, height=10),
             confidence=Confidence(score=1.0),
-            provenance=Provenance(kind="system_prediction", source="test")
+            provenance=Provenance(kind="system_prediction", source="test"),
         )
 
     # Creating many fields where the sets of field names will be large.
@@ -110,6 +112,7 @@ def test_structured_field_scores_determinism() -> None:
     base_score = structured_field_scores(doc_ref, doc_hyp).coordinate_iou
 
     import random
+
     random.seed(42)
 
     # Check that reversing the fields does not alter the output coordinate_iou score
