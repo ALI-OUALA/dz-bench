@@ -35,3 +35,40 @@ def test_bounding_box_iou_is_exact_for_identical_and_disjoint_boxes() -> None:
     box = BoundingBox(x=0, y=0, width=10, height=10)
     assert bounding_box_iou(box, box) == 1.0
     assert bounding_box_iou(box, BoundingBox(x=20, y=20, width=5, height=5)) == 0.0
+
+
+def test_greedy_block_matches_breaks_ties_deterministically() -> None:
+    from dz_bench.metrics import greedy_block_matches
+    from dz_bench.models import Block, BoundingBox
+
+    reference = [
+        Block.model_construct(
+            block_id="ref1",
+            block_type="paragraph",
+            bbox=BoundingBox.model_construct(x=0, y=0, width=10, height=10),
+            reading_order_index=0,
+            lines=[],
+        )
+    ]
+
+    hypothesis = [
+        Block.model_construct(
+            block_id="hyp1",
+            block_type="paragraph",
+            bbox=BoundingBox.model_construct(x=0, y=0, width=10, height=10),
+            reading_order_index=1,
+            lines=[],
+        ),
+        Block.model_construct(
+            block_id="hyp2",
+            block_type="paragraph",
+            bbox=BoundingBox.model_construct(x=0, y=0, width=10, height=10),
+            reading_order_index=0,
+            lines=[],
+        ),
+    ]
+
+    matches = greedy_block_matches(reference, hypothesis, minimum_iou=0.1)
+    assert len(matches) == 1
+    assert matches[0].hypothesis is not None
+    assert matches[0].hypothesis.block_id == "hyp1"
