@@ -35,3 +35,64 @@ def test_bounding_box_iou_is_exact_for_identical_and_disjoint_boxes() -> None:
     box = BoundingBox(x=0, y=0, width=10, height=10)
     assert bounding_box_iou(box, box) == 1.0
     assert bounding_box_iou(box, BoundingBox(x=20, y=20, width=5, height=5)) == 0.0
+
+
+def test_greedy_block_matches_determinism() -> None:
+    from dz_bench.metrics import greedy_block_matches
+
+    # Provide only required fields so validation succeeds.
+    from dz_bench.models import Block, BoundingBox, Confidence, Provenance
+
+    base_kwargs = {
+        "block_id": "test",
+        "block_type": "paragraph",
+        "reading_order_index": 0,
+        "confidence": Confidence(score=1.0),
+        "provenance": Provenance(kind="system_prediction", source="test"),
+        "lines": [],
+    }
+
+    ref = Block(bbox=BoundingBox(x=0, y=0, width=10, height=10), **base_kwargs)
+    # Both hypotheses overlap equally with the reference.
+    hyp1 = Block(bbox=BoundingBox(x=5, y=5, width=10, height=10), **base_kwargs)
+    hyp2 = Block(bbox=BoundingBox(x=5, y=5, width=10, height=10), **base_kwargs)
+
+    # In a tie, it should pick the one with the lowest index (so hyp1, which is at index 0)
+    matches = greedy_block_matches([ref], [hyp1, hyp2], minimum_iou=0.0)
+    assert len(matches) == 1
+    assert matches[0].hypothesis is hyp1
+
+
+def test_structured_field_scores_determinism() -> None:
+    from dz_bench.metrics import structured_field_scores
+    from dz_bench.models import Confidence, DocumentExtraction, Provenance, StructuredField
+
+    base_field = {
+        "field_id": "test",
+        "value_type": "string",
+        "confidence": Confidence(score=1.0),
+        "provenance": Provenance(kind="system_prediction", source="test"),
+    }
+
+    # Two identical documents that have fields in a different set order
+    ref = DocumentExtraction(
+        document_id="doc1",
+        schema_name="invoice",
+        schema_version="1.0.0",
+        fields=[
+            StructuredField(field_name="a", value="1", normalized_value="1", **base_field),
+            StructuredField(field_name="b", value="2", normalized_value="2", **base_field),
+        ],
+    )
+    hyp = DocumentExtraction(
+        document_id="doc1",
+        schema_name="invoice",
+        schema_version="1.0.0",
+        fields=[
+            StructuredField(field_name="a", value="1", normalized_value="1", **base_field),
+            StructuredField(field_name="b", value="2", normalized_value="2", **base_field),
+        ],
+    )
+    scores = structured_field_scores(ref, hyp)
+    assert scores.precision == 1.0
+    assert scores.recall == 1.0
