@@ -174,7 +174,7 @@ def structured_field_scores(
     financial_count = 0
     coordinate_scores: list[float] = []
     hallucinated = 0
-    for name in set(reference_by_name) | set(hypothesis_by_name):
+    for name in sorted(set(reference_by_name) | set(hypothesis_by_name)):
         expected = reference_by_name.get(name, [])
         predicted = hypothesis_by_name.get(name, [])
         hallucinated += max(0, len(predicted) - len(expected))
@@ -229,7 +229,10 @@ def greedy_block_matches(
             continue
         best_index = max(
             remaining,
-            key=lambda index: bounding_box_iou(reference_block.bbox, hypothesis[index].bbox),
+            key=lambda index: (
+                bounding_box_iou(reference_block.bbox, hypothesis[index].bbox),
+                -index,
+            ),
         )
         best_iou = bounding_box_iou(reference_block.bbox, hypothesis[best_index].bbox)
         if best_iou < minimum_iou:
