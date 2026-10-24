@@ -35,3 +35,49 @@ def test_bounding_box_iou_is_exact_for_identical_and_disjoint_boxes() -> None:
     box = BoundingBox(x=0, y=0, width=10, height=10)
     assert bounding_box_iou(box, box) == 1.0
     assert bounding_box_iou(box, BoundingBox(x=20, y=20, width=5, height=5)) == 0.0
+
+
+def test_greedy_block_matches_tie_breaks_deterministically() -> None:
+    from dz_bench.metrics import greedy_block_matches
+    from dz_bench.models import Block, BoundingBox, Confidence, Provenance
+
+    reference = Block(
+        block_id="ref",
+        block_type="paragraph",
+        bbox=BoundingBox(x=0, y=0, width=10, height=10),
+        reading_order_index=1,
+        lines=[],
+        provenance=Provenance(kind="human_annotation", source="annotator"),
+        confidence=Confidence(score=1.0),
+    )
+    # Both hypotheses have exactly the same IoU (1.0) with the reference.
+    hypothesis1 = Block(
+        block_id="hyp1",
+        block_type="paragraph",
+        bbox=BoundingBox(x=0, y=0, width=10, height=10),
+        reading_order_index=1,
+        lines=[],
+        provenance=Provenance(kind="human_annotation", source="annotator"),
+        confidence=Confidence(score=1.0),
+    )
+    hypothesis2 = Block(
+        block_id="hyp2",
+        block_type="paragraph",
+        bbox=BoundingBox(x=0, y=0, width=10, height=10),
+        reading_order_index=2,
+        lines=[],
+        provenance=Provenance(kind="human_annotation", source="annotator"),
+        confidence=Confidence(score=1.0),
+    )
+
+    matches = greedy_block_matches([reference], [hypothesis1, hypothesis2])
+    assert len(matches) == 1
+    # Because of the -index tie breaker, it should always pick the earliest one (hypothesis1).
+    assert matches[0].hypothesis is not None
+    assert matches[0].hypothesis.block_id == "hyp1"
+
+    # Swap the order in the list, it should still pick the first one in the new list (hypothesis2).
+    matches_swapped = greedy_block_matches([reference], [hypothesis2, hypothesis1])
+    assert len(matches_swapped) == 1
+    assert matches_swapped[0].hypothesis is not None
+    assert matches_swapped[0].hypothesis.block_id == "hyp2"
