@@ -35,3 +35,35 @@ def test_bounding_box_iou_is_exact_for_identical_and_disjoint_boxes() -> None:
     box = BoundingBox(x=0, y=0, width=10, height=10)
     assert bounding_box_iou(box, box) == 1.0
     assert bounding_box_iou(box, BoundingBox(x=20, y=20, width=5, height=5)) == 0.0
+
+
+def test_greedy_block_matches_determinism() -> None:
+    from dz_bench.metrics import greedy_block_matches
+    from dz_bench.models import Block, BoundingBox, Confidence, Provenance
+
+    # Create one reference block and multiple identical hypothesis blocks
+    ref_block = Block(
+        block_id="ref1",
+        block_type="paragraph",
+        bbox=BoundingBox(x=0, y=0, width=10, height=10),
+        reading_order_index=0,
+        confidence=Confidence(score=1.0),
+        provenance=Provenance(kind="human_annotation", source="test"),
+    )
+
+    hyp_blocks = [
+        Block(
+            block_id=f"hyp{i}",
+            block_type="paragraph",
+            bbox=BoundingBox(x=0, y=0, width=10, height=10),
+            reading_order_index=i,
+            confidence=Confidence(score=1.0),
+            provenance=Provenance(kind="system_prediction", source="test"),
+        )
+        for i in range(5)
+    ]
+
+    matches = greedy_block_matches([ref_block], hyp_blocks)
+    assert len(matches) == 1
+    # Because of the tie breaker `-index`, index 0 should always be selected.
+    assert matches[0].hypothesis == hyp_blocks[0]
