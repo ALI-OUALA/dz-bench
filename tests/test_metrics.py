@@ -35,3 +35,46 @@ def test_bounding_box_iou_is_exact_for_identical_and_disjoint_boxes() -> None:
     box = BoundingBox(x=0, y=0, width=10, height=10)
     assert bounding_box_iou(box, box) == 1.0
     assert bounding_box_iou(box, BoundingBox(x=20, y=20, width=5, height=5)) == 0.0
+
+
+def test_greedy_block_matches_deterministic_tie_breaking() -> None:
+    from dz_bench.metrics import greedy_block_matches
+    from dz_bench.models import Block, BoundingBox
+
+    reference = [
+        Block(
+            block_id="ref_1",
+            block_type="paragraph",
+            reading_order_index=0,
+            confidence={"score": 1.0},
+            provenance={"kind": "system_prediction", "source": "test"},
+            bbox=BoundingBox(x=0, y=0, width=10, height=10),
+        )
+    ]
+
+    # Create two identical bounding boxes to force a tie
+    hypothesis = [
+        Block(
+            block_id="hyp_1",
+            block_type="paragraph",
+            reading_order_index=0,
+            confidence={"score": 1.0},
+            provenance={"kind": "system_prediction", "source": "test"},
+            bbox=BoundingBox(x=0, y=0, width=10, height=10),
+        ),
+        Block(
+            block_id="hyp_2",
+            block_type="paragraph",
+            reading_order_index=1,
+            confidence={"score": 1.0},
+            provenance={"kind": "system_prediction", "source": "test"},
+            bbox=BoundingBox(x=0, y=0, width=10, height=10),
+        ),
+    ]
+
+    # We can test determinism directly by verifying which index wins.
+    # Because our logic uses -index, the smaller index should ALWAYS win a tie.
+    matches = greedy_block_matches(reference, hypothesis)
+    assert len(matches) == 1
+    assert matches[0].hypothesis is not None
+    assert matches[0].hypothesis.block_id == "hyp_1"
