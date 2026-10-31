@@ -109,3 +109,50 @@ def test_structured_field_scoring_does_not_misclassify_financial_fields() -> Non
     scores = structured_field_scores(reference, reference.model_copy())
     assert scores.financial_count == 1
     assert scores.financial_accuracy == 1.0
+
+
+def test_structured_field_scoring_is_deterministic_in_order() -> None:
+    from unittest.mock import patch
+
+    reference = DocumentExtraction(
+        document_id="doc-1",
+        schema_name="schema",
+        schema_version="1.0.0",
+        fields=[
+            _field("z_field", "val"),
+            _field("a_field", "val"),
+            _field("m_field", "val"),
+        ],
+    )
+    hypothesis = reference.model_copy()
+
+    # Track order of field processing by extracting the x coordinate passed to bounding_box_iou.
+    # To do this, we need fields to have different bounding boxes.
+    for i, field in enumerate(reference.fields):
+        if field.bbox:
+            # Recreate bbox to bypass Pydantic frozen mutation
+            reference.fields[i] = field.model_copy(
+                update={
+                    "bbox": BoundingBox(
+                        x=float(i), y=field.bbox.y, width=field.bbox.width, height=field.bbox.height
+                    )
+                }
+            )
+            hypothesis.fields[i] = reference.fields[i].model_copy()
+
+    # reference.fields[0] is z_field (x=0.0)
+    # reference.fields[1] is a_field (x=1.0)
+    # reference.fields[2] is m_field (x=2.0)
+
+    observed_xs = []
+
+    def mock_iou(first: BoundingBox, second: BoundingBox) -> float:
+        observed_xs.append(first.x)
+        return 1.0
+
+    with patch("dz_bench.metrics.bounding_box_iou", mock_iou):
+        structured_field_scores(reference, hypothesis)
+
+    # The fields should be processed in alphabetical order: a_field, m_field, z_field
+    # So we expect x coordinates: 1.0, 2.0, 0.0
+    assert observed_xs == [1.0, 2.0, 0.0]
