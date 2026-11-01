@@ -78,3 +78,83 @@ def test_greedy_block_matches_deterministic_tie_breaking() -> None:
     assert len(matches) == 1
     assert matches[0].hypothesis is not None
     assert matches[0].hypothesis.block_id == "hyp_1"
+
+
+def test_structured_field_scores_determinism() -> None:
+    from dz_bench.metrics import structured_field_scores
+    from dz_bench.models import (
+        BoundingBox,
+        Confidence,
+        DocumentExtraction,
+        Provenance,
+        StructuredField,
+    )
+
+    ref_fields = []
+    hyp_fields = []
+
+    name_big = "BIG"
+    ref_fields.append(
+        StructuredField(
+            field_id="b",
+            field_name=name_big,
+            value="1",
+            normalized_value="1",
+            value_type="string",
+            confidence=Confidence(score=1),
+            provenance=Provenance(kind="system_prediction", source="a"),
+            bbox=BoundingBox(x=0, y=0, width=10, height=10),
+        )
+    )
+    hyp_fields.append(
+        StructuredField(
+            field_id="b",
+            field_name=name_big,
+            value="1",
+            normalized_value="1",
+            value_type="string",
+            confidence=Confidence(score=1),
+            provenance=Provenance(kind="system_prediction", source="a"),
+            bbox=BoundingBox(x=0, y=0, width=10, height=10),
+        )
+    )
+
+    for i in range(25):
+        name = f"f_{i}"
+        ref_fields.append(
+            StructuredField(
+                field_id=str(i),
+                field_name=name,
+                value="1",
+                normalized_value="1",
+                value_type="string",
+                confidence=Confidence(score=1),
+                provenance=Provenance(kind="system_prediction", source="a"),
+                bbox=BoundingBox(x=0, y=0, width=100000000 + i, height=100000000 + i),
+            )
+        )
+        hyp_fields.append(
+            StructuredField(
+                field_id=str(i),
+                field_name=name,
+                value="1",
+                normalized_value="1",
+                value_type="string",
+                confidence=Confidence(score=1),
+                provenance=Provenance(kind="system_prediction", source="a"),
+                bbox=BoundingBox(x=99999999, y=99999999, width=100000000 + i, height=100000000 + i),
+            )
+        )
+
+    ref = DocumentExtraction(
+        document_id="doc1", schema_name="s", schema_version="1.0.0", fields=ref_fields
+    )
+    hyp = DocumentExtraction(
+        document_id="doc1", schema_name="s", schema_version="1.0.0", fields=hyp_fields
+    )
+
+    # Run structured_field_scores multiple times
+    scores1 = structured_field_scores(ref, hyp)
+
+    # Verify the specific sum using the deterministic sorted order
+    assert scores1.coordinate_iou == 0.03846153846154909
