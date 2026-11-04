@@ -78,3 +78,52 @@ def test_greedy_block_matches_deterministic_tie_breaking() -> None:
     assert len(matches) == 1
     assert matches[0].hypothesis is not None
     assert matches[0].hypothesis.block_id == "hyp_1"
+
+
+def test_structured_field_scores_determinism() -> None:
+    from dz_bench.metrics import structured_field_scores
+    from dz_bench.models import BoundingBox, DocumentExtraction, StructuredField
+
+    # Construct reference and hypothesis with multiple distinct field names
+    # to trigger non-deterministic set iteration if not sorted.
+    # By adding a large number of fields, we can ensure there is a non-associative
+    # float summation that could differ across runs if iteration order varied.
+    fields_ref = [
+        StructuredField(
+            field_id=f"ref_{i}",
+            field_name=f"field_{i}",
+            value=f"val_{i}",
+            normalized_value=f"val_{i}",
+            value_type="string",
+            confidence={"score": 1.0},
+            provenance={"kind": "system_prediction", "source": "test"},
+            bbox=BoundingBox(x=0, y=0, width=10, height=10),
+        )
+        for i in range(50)
+    ]
+    fields_hyp = [
+        StructuredField(
+            field_id=f"hyp_{i}",
+            field_name=f"field_{i}",
+            value=f"val_{i}",
+            normalized_value=f"val_{i}",
+            value_type="string",
+            confidence={"score": 1.0},
+            provenance={"kind": "system_prediction", "source": "test"},
+            bbox=BoundingBox(x=i % 10, y=i % 10, width=10, height=10),
+        )
+        for i in range(50)
+    ]
+    ref = DocumentExtraction(
+        document_id="doc1", schema_name="test", schema_version="1.0.0", fields=fields_ref
+    )
+    hyp = DocumentExtraction(
+        document_id="doc1", schema_name="test", schema_version="1.0.0", fields=fields_hyp
+    )
+
+    scores1 = structured_field_scores(ref, hyp)
+    scores2 = structured_field_scores(ref, hyp)
+
+    # If sets are not sorted before float accumulation, this might rarely fail
+    # or fail across different Python executions. With sorted(), it must be exact.
+    assert scores1.coordinate_iou == scores2.coordinate_iou
