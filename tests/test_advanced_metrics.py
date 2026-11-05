@@ -15,7 +15,7 @@ from dz_bench.models import (
 )
 
 
-def _field(name: str, value: str, *, confidence: float = 1.0) -> StructuredField:
+def _field(name: str, value: str, *, confidence: float = 1.0, x: float = 10) -> StructuredField:
     return StructuredField(
         field_id=f"field-{name.replace('.', '-')}",
         field_name=name,
@@ -24,7 +24,7 @@ def _field(name: str, value: str, *, confidence: float = 1.0) -> StructuredField
         value_type="decimal" if "total" in name else "string",
         confidence=Confidence(score=confidence, calibrated=False),
         page_id="invoice-page-1",
-        bbox=BoundingBox(x=10, y=20, width=100, height=30),
+        bbox=BoundingBox(x=x, y=20, width=100, height=30),
         provenance=Provenance(kind="human_annotation", source="test"),
     )
 
@@ -109,3 +109,61 @@ def test_structured_field_scoring_does_not_misclassify_financial_fields() -> Non
     scores = structured_field_scores(reference, reference.model_copy())
     assert scores.financial_count == 1
     assert scores.financial_accuracy == 1.0
+
+
+def test_structured_field_scoring_is_deterministic() -> None:
+    import random
+
+    from dz_bench.metrics import structured_field_scores
+
+    reference_fields = [
+        _field("invoice_number", "FA-2026-0042", x=10),
+        _field("total_ht", "100.00", x=20),
+        _field("total_ttc", "119.00", x=30),
+        _field("currency", "DZD", x=40),
+        _field("shipping_weight", "10kg", x=50),
+        _field("flight_number", "AH1004", x=60),
+    ]
+    hypothesis_fields = [
+        _field("invoice_number", "FA-2026-0042", confidence=0.9, x=15),
+        _field("total_ht", "100.00", confidence=0.8, x=25),
+        _field("total_ttc", "119.00", confidence=0.9, x=35),
+        _field("currency", "DZD", confidence=0.7, x=45),
+        _field("shipping_weight", "10kg", confidence=0.9, x=55),
+        _field("flight_number", "AH1004", confidence=0.9, x=65),
+    ]
+
+    baseline_reference = DocumentExtraction(
+        document_id="invoice-1",
+        schema_name="invoice-dz",
+        schema_version="1.0.0",
+        fields=reference_fields,
+    )
+    baseline_hypothesis = DocumentExtraction(
+        document_id="invoice-1",
+        schema_name="invoice-dz",
+        schema_version="1.0.0",
+        fields=hypothesis_fields,
+    )
+
+    baseline_scores = structured_field_scores(baseline_reference, baseline_hypothesis)
+
+    for _ in range(20):
+        random.shuffle(reference_fields)
+        random.shuffle(hypothesis_fields)
+
+        shuffled_reference = DocumentExtraction(
+            document_id="invoice-1",
+            schema_name="invoice-dz",
+            schema_version="1.0.0",
+            fields=reference_fields,
+        )
+        shuffled_hypothesis = DocumentExtraction(
+            document_id="invoice-1",
+            schema_name="invoice-dz",
+            schema_version="1.0.0",
+            fields=hypothesis_fields,
+        )
+
+        scores = structured_field_scores(shuffled_reference, shuffled_hypothesis)
+        assert scores == baseline_scores
